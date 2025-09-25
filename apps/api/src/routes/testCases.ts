@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middlewares/auth';
+import { upload } from '../middlewares/upload';
 import { z } from 'zod';
 
 const router = Router();
@@ -37,6 +38,37 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
     res.json({ success: true, data: updated });
   } catch {
     return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Test case not found' } });
+  }
+});
+
+// Artifacts
+router.post('/:id/artifacts', requireAuth, upload.single('file'), async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!req.file) return res.status(400).json({ success: false, error: { code: 'NO_FILE', message: 'File required' } });
+  const artifact = await prisma.testCaseArtifact.create({ data: {
+    testCaseId: id,
+    type: req.file.mimetype.startsWith('video') ? 'video' : 'image',
+    filePath: req.file.path,
+    originalName: req.file.originalname,
+    mimeType: req.file.mimetype,
+    sizeBytes: req.file.size
+  }});
+  res.status(201).json({ success: true, data: artifact });
+});
+
+router.get('/:id/artifacts', requireAuth, async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const list = await prisma.testCaseArtifact.findMany({ where: { testCaseId: id }, orderBy: { createdAt: 'desc' } });
+  res.json({ success: true, data: list });
+});
+
+router.delete('/:id/artifacts/:artifactId', requireAuth, async (req: Request, res: Response) => {
+  const artifactId = Number(req.params.artifactId);
+  try {
+    await prisma.testCaseArtifact.delete({ where: { id: artifactId } });
+    res.json({ success: true, data: { deleted: true } });
+  } catch {
+    res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Artifact not found' } });
   }
 });
 

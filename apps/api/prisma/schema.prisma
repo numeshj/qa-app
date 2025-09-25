@@ -63,7 +63,7 @@ model Project {
   code        String     @unique
   name        String
   description String?
-  status      ProjectStatus @default(active)
+  status      String       @default("active")
   startDate   DateTime?   @map("start_date")
   endDate     DateTime?   @map("end_date")
   owner       User?       @relation("ProjectOwner", fields: [ownerId], references: [id])
@@ -72,12 +72,6 @@ model Project {
   updatedAt   DateTime    @updatedAt @map("updated_at")
   testCases   TestCase[]
   defects     Defect[]
-}
-
-enum ProjectStatus {
-  active
-  completed
-  on_hold
 }
 
 model TestCase {
@@ -92,10 +86,10 @@ model TestCase {
   preRequisite   String?   @map("pre_requisite")
   inputData      Json?     @map("input_data")
   expectedResult String?   @map("expected_result")
-  severity       Severity? 
-  complexity     Complexity?
+  severity       String?
+  complexity     String?
   actualResult   String?   @map("actual_result")
-  status         TestCaseStatus? 
+  status         String?
   defectIdRef    String?   @map("defect_id_ref")
   comments       String?
   labels         String?   // store CSV for simplicity first; can migrate to SET later
@@ -108,27 +102,6 @@ model TestCase {
   artifacts      TestCaseArtifact[]
   @@unique([projectId, testCaseIdCode])
   @@map("test_cases")
-}
-
-enum Severity {
-  High
-  Medium
-  Low
-}
-
-enum Complexity {
-  High
-  Medium
-  Low
-}
-
-enum TestCaseStatus {
-  Pass
-  Fail
-  On_Hold
-  Not_Applicable
-  Cannot_be_Executed
-  Blocked
 }
 
 model TestCaseArtifact {
@@ -160,9 +133,9 @@ model Defect {
   testData      Json?    @map("test_data")
   actualResults String?  @map("actual_results")
   expectedResults String? @map("expected_results")
-  priority      Priority?
-  severity      DefectSeverity?
-  status        DefectStatus? @default(open)
+  priority      String?
+  severity      String?
+  status        String?  @default("open")
   release       String?
   assignedTo    User?    @relation("DefectAssignedTo", fields: [assignedToId], references: [id])
   assignedToId  Int?
@@ -171,7 +144,7 @@ model Defect {
   reportedById  Int?
   labels        String?  // CSV minimal first
   environment   String?
-  rcaStatus     RcaStatus? @map("rca_status")
+  rcaStatus     String? @map("rca_status")
   reportedDate  DateTime? @map("reported_date")
   closedDate    DateTime? @map("closed_date")
   comments      String?
@@ -181,33 +154,6 @@ model Defect {
   artifacts     DefectArtifact[]
   @@unique([projectId, defectIdCode])
   @@map("defects")
-}
-
-enum Priority {
-  highest
-  high
-  medium
-  low
-}
-
-enum DefectSeverity {
-  highest
-  high
-  medium
-  low
-}
-
-enum DefectStatus {
-  resolved
-  open
-  inprogress
-  rejected
-  reopened
-}
-
-enum RcaStatus {
-  complete
-  inprogress
 }
 
 model DefectArtifact {
@@ -235,4 +181,17 @@ model AuditLog {
   afterJson   Json?    @map("after_json")
   createdAt   DateTime @default(now()) @map("created_at")
   @@map("audit_logs")
+}
+
+// Generic lookup table for dynamic dropdown values
+model LookupValue {
+  id         Int      @id @default(autoincrement())
+  category   String
+  code       String
+  label      String?
+  sortOrder  Int?     @map("sort_order")
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  @@unique([category, code])
+  @@map("lookup_values")
 }

@@ -32,6 +32,43 @@ async function main() {
     create: { projectId: project.id, defectIdCode: 'DEF-1', title: 'Login button misaligned', severity: 'medium', priority: 'medium', reportedById: admin.id }
   });
 
+  // lookup values (dynamic dropdowns)
+  const lookups: { category: string; code: string; sortOrder: number }[] = [
+    // severities
+    { category: 'defect_severity', code: 'highest', sortOrder: 1 },
+    { category: 'defect_severity', code: 'high', sortOrder: 2 },
+    { category: 'defect_severity', code: 'medium', sortOrder: 3 },
+    { category: 'defect_severity', code: 'low', sortOrder: 4 },
+    { category: 'priority', code: 'highest', sortOrder: 1 },
+    { category: 'priority', code: 'high', sortOrder: 2 },
+    { category: 'priority', code: 'medium', sortOrder: 3 },
+    { category: 'priority', code: 'low', sortOrder: 4 },
+    { category: 'testcase_severity', code: 'High', sortOrder: 1 },
+    { category: 'testcase_severity', code: 'Medium', sortOrder: 2 },
+    { category: 'testcase_severity', code: 'Low', sortOrder: 3 },
+    { category: 'testcase_complexity', code: 'High', sortOrder: 1 },
+    { category: 'testcase_complexity', code: 'Medium', sortOrder: 2 },
+    { category: 'testcase_complexity', code: 'Low', sortOrder: 3 },
+    { category: 'project_status', code: 'active', sortOrder: 1 },
+    { category: 'project_status', code: 'completed', sortOrder: 2 },
+    { category: 'project_status', code: 'on_hold', sortOrder: 3 },
+    { category: 'defect_status', code: 'open', sortOrder: 1 },
+    { category: 'defect_status', code: 'inprogress', sortOrder: 2 },
+    { category: 'defect_status', code: 'resolved', sortOrder: 3 },
+    { category: 'defect_status', code: 'reopened', sortOrder: 4 },
+    { category: 'defect_status', code: 'rejected', sortOrder: 5 },
+    { category: 'testcase_status', code: 'Pass', sortOrder: 1 },
+    { category: 'testcase_status', code: 'Fail', sortOrder: 2 },
+    { category: 'testcase_status', code: 'On_Hold', sortOrder: 3 },
+    { category: 'testcase_status', code: 'Not_Applicable', sortOrder: 4 },
+    { category: 'testcase_status', code: 'Cannot_be_Executed', sortOrder: 5 },
+    { category: 'testcase_status', code: 'Blocked', sortOrder: 6 }
+  ];
+
+  for (const l of lookups) {
+    await prisma.lookupValue.upsert({ where: { category_code: { category: l.category, code: l.code } }, update: {}, create: { category: l.category, code: l.code, sortOrder: l.sortOrder } });
+  }
+
   console.log('Seed complete');
 }
 
