@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import { Button, Card, Form, Input, Modal, Select, Space, Table, Upload, message, Dropdown } from 'antd';
+import { Button, Card, Form, Input, Modal, Select, Space, Table, Upload, message } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import type { UploadFile } from 'antd/es/upload/interface';
@@ -23,6 +23,9 @@ const TestCasesPage = () => {
   const [form] = Form.useForm();
   const [artifactModal, setArtifactModal] = useState<{open: boolean; testCase: TestCase | null}>({ open: false, testCase: null });
   const [fileList, setFileList] = useState<any[]>([]);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<any | null>(null);
 
   const saveMutation = useMutation({
     mutationFn: async (values: any) => {
@@ -49,9 +52,10 @@ const TestCasesPage = () => {
   // For simplicity left out artifact UI for now.
 
   return <Card title='Test Cases' extra={<Button type='primary' onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }}>New</Button>}>
-    <div style={{ marginBottom: 16 }}>
-      <Button onClick={() => {}} style={{ marginRight: 8 }}>Import</Button>
-      <Button onClick={() => {}} type='primary'>Export</Button>
+    <div style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <Button onClick={() => setImportOpen(true)}>Import</Button>
+      <Button onClick={async () => { window.location.href = `${api.defaults.baseURL}/test-cases/export/xlsx`; }}>Export</Button>
+      <Button onClick={() => { window.location.href = `${api.defaults.baseURL}/test-cases/template/xlsx`; }}>Template</Button>
     </div>
     <Table size='small' rowKey='id' loading={isLoading} dataSource={data?.data || []} columns={columns as any} pagination={false} />
     <Modal open={open} onCancel={() => setOpen(false)} onOk={() => form.submit()} title={editing ? 'Edit Test Case' : 'New Test Case'} destroyOnClose>
@@ -67,7 +71,38 @@ const TestCasesPage = () => {
         <Form.Item name='complexity' label='Complexity'>
           <Select options={(complexity.data?.data || []).map(l => ({ value: l.code, label: l.code }))} loading={complexity.isLoading} allowClear />
         </Form.Item>
+        <Form.Item name='status' label='Status'>
+          <Select options={['Pass','Fail','On_Hold','Not_Applicable','Cannot_be_Executed','Blocked'].map(v => ({ value: v, label: v }))} allowClear />
+        </Form.Item>
       </Form>
+    </Modal>
+    <Modal open={importOpen} title='Import Test Cases' onCancel={() => { setImportOpen(false); setImportResult(null); }} onOk={() => { /* trigger close */ setImportOpen(false); setImportResult(null); }} okText='Close'>
+      <Upload beforeUpload={() => false} maxCount={1} onChange={({ fileList }) => setFileList(fileList)} fileList={fileList} accept='.xlsx,.csv'>
+        <Button icon={<UploadOutlined />}>Select File</Button>
+      </Upload>
+      <Button disabled={!fileList.length} loading={importing} style={{ marginTop: 12 }} onClick={async () => {
+        if (!fileList.length) return; setImporting(true);
+        try {
+          const fd = new FormData();
+            fd.append('file', fileList[0].originFileObj);
+            const res = await api.post('/test-cases/import/xlsx', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+            setImportResult(res.data.data);
+            message.success('Import complete');
+            qc.invalidateQueries({ queryKey: ['test-cases'] });
+        } catch (e: any) {
+          message.error(e.response?.data?.error?.message || 'Import failed');
+        } finally {
+          setImporting(false);
+        }
+      }}>Upload & Process</Button>
+      {importResult && <div style={{ marginTop: 16 }}>
+        <strong>Summary:</strong><br />
+        Created/Updated: {importResult.summary.created} | Failed: {importResult.summary.failed}
+        {importResult.failed.length > 0 && <div style={{ maxHeight: 120, overflow: 'auto', marginTop: 8 }}>
+          {importResult.failed.slice(0,25).map((f: any, i: number) => <div key={i}>Row {f.row}: {f.errors.join(', ')}</div>)}
+          {importResult.failed.length > 25 && <div>... {importResult.failed.length - 25} more</div>}
+        </div>}
+      </div>}
     </Modal>
     <Modal open={artifactModal.open} onCancel={() => { setArtifactModal({ open: false, testCase: null }); setFileList([]); }} onOk={() => { setArtifactModal({ open: false, testCase: null }); setFileList([]); }} title={`Artifacts - ${artifactModal.testCase?.testCaseIdCode}`} destroyOnClose>
       {artifactModal.testCase && <Upload
