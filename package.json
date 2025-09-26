@@ -7,6 +7,8 @@
     "postinstall": "pnpm -r prepare",
     "build": "pnpm -r build",
     "dev": "pnpm --recursive --parallel dev",
+    "dev:api": "pnpm --filter @qa/api dev",
+    "dev:web": "pnpm --filter @qa/web dev",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "format": "pnpm -r format"

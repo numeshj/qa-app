@@ -14,7 +14,8 @@ const projectSchema = z.object({
 
 router.get('/', requireAuth, async (_req: Request, res: Response) => {
   const list = await prisma.project.findMany({ take: 50, orderBy: { createdAt: 'desc' } });
-  res.json({ success: true, data: list });
+  const total = await prisma.project.count();
+  res.json({ success: true, data: list, pagination: { total, take: 50, skip: 0 } });
 });
 
 router.post('/', requireAuth, async (req: Request, res: Response) => {

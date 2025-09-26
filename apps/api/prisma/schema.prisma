@@ -26,6 +26,7 @@ model User {
   TestCaseUpdated TestCase[] @relation("TestCaseUpdatedBy")
   DefectAssigned Defect[]   @relation("DefectAssignedTo")
   DefectReported Defect[]   @relation("DefectReportedBy")
+  auditLogs     AuditLog[]
 }
 
 model Role {
@@ -172,8 +173,8 @@ model DefectArtifact {
 // Optional audit minimal
 model AuditLog {
   id          Int      @id @default(autoincrement())
-  actorUser   User?    @relation(fields: [actorUserId], references: [id])
-  actorUserId Int?
+  userId      Int?
+  user        User?    @relation(fields: [userId], references: [id])
   entityType  String   @map("entity_type")
   entityId    Int      @map("entity_id")
   action      String

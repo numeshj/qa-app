@@ -18,8 +18,12 @@ const baseSchema = z.object({
 router.get('/', requireAuth, async (req: Request, res: Response) => {
   const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
   const where = projectId ? { projectId } : {};
-  const list = await prisma.defect.findMany({ where, take: 50, orderBy: { createdAt: 'desc' } });
-  res.json({ success: true, data: list });
+  const take = 50; const skip = 0;
+  const [list, total] = await Promise.all([
+    prisma.defect.findMany({ where, take, skip, orderBy: { createdAt: 'desc' } }),
+    prisma.defect.count({ where })
+  ]);
+  res.json({ success: true, data: list, pagination: { total, take, skip } });
 });
 
 router.post('/', requireAuth, async (req: Request, res: Response) => {
