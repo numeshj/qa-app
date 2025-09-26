@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { Button, Card, Form, Input, Modal, Select, Space, Table, Upload, message } from 'antd';
+import { UploadOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import type { UploadFile } from 'antd/es/upload/interface';
 
@@ -20,6 +21,8 @@ const TestCasesPage = () => {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<TestCase | null>(null);
   const [form] = Form.useForm();
+  const [artifactModal, setArtifactModal] = useState<{open: boolean; testCase: TestCase | null}>({ open: false, testCase: null });
+  const [fileList, setFileList] = useState<any[]>([]);
 
   const saveMutation = useMutation({
     mutationFn: async (values: any) => {
@@ -36,7 +39,10 @@ const TestCasesPage = () => {
     { title: 'Severity', dataIndex: 'severity' },
     { title: 'Complexity', dataIndex: 'complexity' },
     { title: 'Project', dataIndex: 'projectId', render: (v: number) => projects.data?.data.find(p => p.id === v)?.code },
-    { title: 'Actions', render: (_: any, r: TestCase) => <Space><Button size='small' onClick={() => { setEditing(r); form.setFieldsValue(r); setOpen(true); }}>Edit</Button></Space> }
+    { title: 'Actions', render: (_: any, r: TestCase) => <Space>
+        <Button size='small' onClick={() => { setEditing(r); form.setFieldsValue(r); setOpen(true); }}>Edit</Button>
+        <Button size='small' onClick={() => setArtifactModal({ open: true, testCase: r })}>Artifacts</Button>
+      </Space> }
   ];
 
   // File upload (artifacts) minimal: open upload modal per row in future (placeholder)
@@ -58,6 +64,29 @@ const TestCasesPage = () => {
           <Select options={(complexity.data?.data || []).map(l => ({ value: l.code, label: l.code }))} loading={complexity.isLoading} allowClear />
         </Form.Item>
       </Form>
+    </Modal>
+    <Modal open={artifactModal.open} onCancel={() => { setArtifactModal({ open: false, testCase: null }); setFileList([]); }} onOk={() => { setArtifactModal({ open: false, testCase: null }); setFileList([]); }} title={`Artifacts - ${artifactModal.testCase?.testCaseIdCode}`} destroyOnClose>
+      {artifactModal.testCase && <Upload
+        fileList={fileList}
+        multiple
+        beforeUpload={() => false}
+        onChange={({ fileList }) => setFileList(fileList)}
+        customRequest={async ({ file, onSuccess, onError }: any) => {
+          try {
+            const formData = new FormData();
+            formData.append('file', file as File);
+            await api.post(`/test-cases/${artifactModal.testCase!.id}/artifacts`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+            onSuccess('ok');
+            message.success('Uploaded');
+          } catch (e: any) {
+            onError(e);
+            message.error(e.response?.data?.error?.message || 'Upload failed');
+          }
+        }}
+      >
+        <Button icon={<UploadOutlined />}>Upload</Button>
+      </Upload>}
+      <p style={{ marginTop: 12, fontSize: 12 }}>Uploads accepted: png, jpg, webp, mp4, webm.</p>
     </Modal>
   </Card>;
 };
