@@ -1,5 +1,5 @@
 import { Layout, Menu } from "antd";
-import { LogoutOutlined, DashboardOutlined, BugOutlined, FolderOutlined, ExperimentOutlined } from "@ant-design/icons";
+import { LogoutOutlined, DashboardOutlined, BugOutlined, FolderOutlined, ExperimentOutlined, FileSearchOutlined } from "@ant-design/icons";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../store/auth";
 import { useEffect } from "react";
@@ -15,7 +15,8 @@ export const AppShell = () => {
     { key: "/app", icon: <DashboardOutlined />, label: <Link to="/app">Dashboard</Link> },
     { key: "/app/projects", icon: <FolderOutlined />, label: <Link to="/app/projects">Projects</Link> },
     { key: "/app/test-cases", icon: <ExperimentOutlined />, label: <Link to="/app/test-cases">Test Cases</Link> },
-    { key: "/app/defects", icon: <BugOutlined />, label: <Link to="/app/defects">Defects</Link> }
+    { key: "/app/defects", icon: <BugOutlined />, label: <Link to="/app/defects">Defects</Link> },
+    { key: "/app/audit", icon: <FileSearchOutlined />, label: <Link to="/app/audit">Audit</Link> }
   ];
 
   useEffect(() => {

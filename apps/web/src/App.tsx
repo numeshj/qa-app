@@ -7,6 +7,7 @@ import DashboardPage from "./pages/DashboardPage";
 import ProjectsPage from "./pages/ProjectsPage";
 import TestCasesPage from "./pages/TestCasesPage";
 import DefectsPage from "./pages/DefectsPage";
+import AuditPage from "./pages/AuditPage";
 
 const App = () => (
   <Routes>
@@ -31,6 +32,7 @@ const App = () => (
       <Route path="projects" element={<ProjectsPage />} />
       <Route path="test-cases" element={<TestCasesPage />} />
       <Route path="defects" element={<DefectsPage />} />
+  <Route path="audit" element={<AuditPage />} />
     </Route>
     <Route path="*" element={<Navigate to="/login" replace />} />
   </Routes>

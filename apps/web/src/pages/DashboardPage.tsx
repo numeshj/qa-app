@@ -12,19 +12,7 @@ interface DashboardData {
 const DashboardPage = () => {
   const { data } = useQuery<DashboardData>({
     queryKey: ["dashboard"],
-    queryFn: async () => {
-      const [projects, testCases, defects] = await Promise.all([
-        api.get("/projects"),
-        api.get("/test-cases"),
-        api.get("/defects")
-      ]);
-      return {
-        projects: projects.data.pagination?.total ?? projects.data.data.length,
-        testCases: testCases.data.pagination?.total ?? testCases.data.data.length,
-        defects: defects.data.pagination?.total ?? defects.data.data.length,
-        openDefects: (defects.data.data || []).filter((d: any) => d.status === 'open').length
-      };
-    }
+    queryFn: async () => (await api.get("/dashboard")).data.data
   });
 
   return (
