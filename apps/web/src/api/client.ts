@@ -1,7 +1,8 @@
 import axios from "axios";
 
+// Backend currently mounts routes at root (e.g. /auth, /projects). Remove /api suffix here.
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:4000/api",
+  baseURL: import.meta.env.VITE_API_URL || "http://localhost:4000",
   withCredentials: false
 });
 
@@ -23,7 +24,7 @@ api.interceptors.response.use(
         const refreshToken = localStorage.getItem("refreshToken");
         if (refreshToken) {
           const res = await axios.post(
-            (import.meta.env.VITE_API_URL || "http://localhost:4000/api") + "/auth/refresh",
+            (import.meta.env.VITE_API_URL || "http://localhost:4000") + "/auth/refresh",
             { refreshToken }
           );
           localStorage.setItem("accessToken", res.data.data.accessToken);
