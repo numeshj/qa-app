@@ -11,6 +11,9 @@ import defectRoutes from "./routes/defects";
 import lookupRoutes from "./routes/lookups";
 import dashboardRoutes from "./routes/dashboard";
 import auditRoutes from "./routes/audit";
+import path from 'path';
+import fs from 'fs';
+import { env } from './config/env';
 
 const app = express();
 
@@ -30,6 +33,12 @@ app.use("/defects", defectRoutes);
 app.use("/lookups", lookupRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/audit", auditRoutes);
+
+// Ensure upload dir exists then serve statics (basic public serving for now)
+if (!fs.existsSync(env.UPLOAD_DIR)) {
+  fs.mkdirSync(env.UPLOAD_DIR, { recursive: true });
+}
+app.use('/files', express.static(path.resolve(env.UPLOAD_DIR)));
 
 app.use(errorHandler);
 

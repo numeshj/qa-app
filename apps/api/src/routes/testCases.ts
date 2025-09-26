@@ -67,6 +67,15 @@ router.get('/:id/artifacts', requireAuth, async (req: Request, res: Response) =>
   res.json({ success: true, data: list });
 });
 
+router.get('/:id/artifacts/summary', requireAuth, async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const [count, latest] = await Promise.all([
+    prisma.testCaseArtifact.count({ where: { testCaseId: id } }),
+    prisma.testCaseArtifact.findFirst({ where: { testCaseId: id }, orderBy: { createdAt: 'desc' } })
+  ]);
+  res.json({ success: true, data: { count, latest } });
+});
+
 router.delete('/:id/artifacts/:artifactId', requireAuth, async (req: Request, res: Response) => {
   const artifactId = Number(req.params.artifactId);
   try {

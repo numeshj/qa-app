@@ -54,6 +54,10 @@ const DefectsPage = () => {
   ];
 
   return <Card title='Defects' extra={<Button type='primary' onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }}>New</Button>}>
+    <div style={{ marginBottom: 16 }}>
+      <Button style={{ marginRight: 8 }} disabled>Import</Button>
+      <Button disabled>Export</Button>
+    </div>
     <Table size='small' rowKey='id' loading={isLoading} dataSource={data?.data || []} columns={columns as any} pagination={false} />
     <Modal open={open} onCancel={() => setOpen(false)} onOk={() => form.submit()} title={editing ? 'Edit Defect' : 'New Defect'} destroyOnClose>
       <Form form={form} layout='vertical' onFinish={(v) => saveMutation.mutate(v)} initialValues={{ defectIdCode: '' }}>
