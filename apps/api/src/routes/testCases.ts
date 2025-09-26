@@ -10,10 +10,20 @@ const router = Router();
 const baseSchema = z.object({
   projectId: z.number(),
   testCaseIdCode: z.string().min(1),
+  category: z.string().optional(),
+  featureName: z.string().optional(),
   description: z.string().optional(),
+  subFunctionality: z.string().optional(),
+  preRequisite: z.string().optional(),
+  inputData: z.any().optional(),
+  expectedResult: z.string().optional(),
   severity: z.enum(['High','Medium','Low']).optional(),
   complexity: z.enum(['High','Medium','Low']).optional(),
-  status: z.enum(['Pass','Fail','On_Hold','Not_Applicable','Cannot_be_Executed','Blocked']).optional()
+  actualResult: z.string().optional(),
+  status: z.enum(['Pass','Fail','On_Hold','Not_Applicable','Cannot_be_Executed','Blocked']).optional(),
+  defectIdRef: z.string().optional(),
+  comments: z.string().optional(),
+  labels: z.string().optional()
 });
 
 router.get('/', requireAuth, async (req: Request, res: Response) => {
@@ -30,7 +40,9 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
 router.post('/', requireAuth, async (req: Request, res: Response) => {
   const parsed = baseSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid', details: parsed.error.flatten().fieldErrors } });
-  const tc = await prisma.testCase.create({ data: parsed.data });
+  // Ensure JSON fields are stored correctly
+  const data = { ...parsed.data, inputData: parsed.data.inputData ?? undefined } as any;
+  const tc = await prisma.testCase.create({ data });
   res.status(201).json({ success: true, data: tc });
 });
 
@@ -39,7 +51,8 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
   const parsed = baseSchema.partial().safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid', details: parsed.error.flatten().fieldErrors } });
   try {
-    const updated = await prisma.testCase.update({ where: { id }, data: parsed.data });
+  const data = { ...parsed.data, inputData: parsed.data.inputData ?? undefined } as any;
+  const updated = await prisma.testCase.update({ where: { id }, data });
     res.json({ success: true, data: updated });
   } catch {
     return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Test case not found' } });
@@ -91,7 +104,9 @@ router.get('/export/xlsx', requireAuth, async (req: Request, res: Response) => {
   const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
   const where = projectId ? { projectId } : {};
   const rows = await prisma.testCase.findMany({ where, orderBy: { id: 'asc' } });
-  const headers = ['projectId','testCaseIdCode','description','severity','complexity','status'];
+  const headers = [
+    'projectId','testCaseIdCode','category','featureName','description','subFunctionality','preRequisite','inputData','expectedResult','severity','complexity','actualResult','status','defectIdRef','comments','labels'
+  ];
   const content = [headers.join(',')]; // CSV fallback if Excel fails later
   // Build workbook
   try {
@@ -112,7 +127,9 @@ router.get('/export/xlsx', requireAuth, async (req: Request, res: Response) => {
 });
 
 router.get('/template/xlsx', requireAuth, async (_req: Request, res: Response) => {
-  const headers = ['projectId','testCaseIdCode','description','severity','complexity','status'];
+  const headers = [
+    'projectId','testCaseIdCode','category','featureName','description','subFunctionality','preRequisite','inputData','expectedResult','severity','complexity','actualResult','status','defectIdRef','comments','labels'
+  ];
   try {
     const buf = buildTemplate(headers, 'TestCases');
     res.setHeader('Content-Disposition', 'attachment; filename="test-cases-template.xlsx"');
@@ -136,10 +153,20 @@ router.post('/import/xlsx', requireAuth, upload.single('file'), async (req: Requ
     const parsed = baseSchema.safeParse({
       projectId: Number(raw.projectId),
       testCaseIdCode: String(raw.testCaseIdCode || '').trim(),
+      category: raw.category || undefined,
+      featureName: raw.featureName || undefined,
       description: raw.description ? String(raw.description) : undefined,
+      subFunctionality: raw.subFunctionality || undefined,
+      preRequisite: raw.preRequisite || undefined,
+      inputData: raw.inputData || undefined,
+      expectedResult: raw.expectedResult || undefined,
       severity: raw.severity || undefined,
       complexity: raw.complexity || undefined,
-      status: raw.status || undefined
+      actualResult: raw.actualResult || undefined,
+      status: raw.status || undefined,
+      defectIdRef: raw.defectIdRef || undefined,
+      comments: raw.comments || undefined,
+      labels: raw.labels || undefined
     });
     if (!parsed.success) {
       failed.push({ row: i + 2, errors: parsed.error.issues.map(is => is.message) });

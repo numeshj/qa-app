@@ -38,14 +38,18 @@ const TestCasesPage = () => {
   });
 
   const columns = [
-    { title: 'Code', dataIndex: 'testCaseIdCode' },
+    { title: 'Code', dataIndex: 'testCaseIdCode', width: 140 },
+    { title: 'Category', dataIndex: 'category' },
+    { title: 'Feature', dataIndex: 'featureName' },
     { title: 'Severity', dataIndex: 'severity' },
     { title: 'Complexity', dataIndex: 'complexity' },
+    { title: 'Status', dataIndex: 'status' },
+    { title: 'Defect Ref', dataIndex: 'defectIdRef' },
     { title: 'Project', dataIndex: 'projectId', render: (v: number) => projects.data?.data.find(p => p.id === v)?.code },
-    { title: 'Actions', render: (_: any, r: TestCase) => <Space>
+    { title: 'Actions', fixed: 'right', render: (_: any, r: any) => <Space>
         <Button size='small' onClick={() => { setEditing(r); form.setFieldsValue(r); setOpen(true); }}>Edit</Button>
         <Button size='small' onClick={() => setArtifactModal({ open: true, testCase: r })}>Artifacts</Button>
-      </Space> }
+      </Space>, width: 150 }
   ];
 
   // File upload (artifacts) minimal: open upload modal per row in future (placeholder)
@@ -54,26 +58,48 @@ const TestCasesPage = () => {
   return <Card title='Test Cases' extra={<Button type='primary' onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }}>New</Button>}>
     <div style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
       <Button onClick={() => setImportOpen(true)}>Import</Button>
-      <Button onClick={async () => { window.location.href = `${api.defaults.baseURL}/test-cases/export/xlsx`; }}>Export</Button>
-      <Button onClick={() => { window.location.href = `${api.defaults.baseURL}/test-cases/template/xlsx`; }}>Template</Button>
+      <Button onClick={async () => {
+        try {
+          const res = await api.get('/test-cases/export/xlsx', { responseType: 'blob' });
+          const url = URL.createObjectURL(res.data);
+          const a = document.createElement('a'); a.href = url; a.download = 'test-cases.xlsx'; a.click(); URL.revokeObjectURL(url);
+        } catch(e:any){ message.error('Export failed'); }
+      }}>Export</Button>
+      <Button onClick={async () => {
+        try {
+          const res = await api.get('/test-cases/template/xlsx', { responseType: 'blob' });
+          const url = URL.createObjectURL(res.data);
+          const a = document.createElement('a'); a.href = url; a.download = 'test-cases-template.xlsx'; a.click(); URL.revokeObjectURL(url);
+        } catch(e:any){ message.error('Template download failed'); }
+      }}>Template</Button>
     </div>
     <Table size='small' rowKey='id' loading={isLoading} dataSource={data?.data || []} columns={columns as any} pagination={false} />
     <Modal open={open} onCancel={() => setOpen(false)} onOk={() => form.submit()} title={editing ? 'Edit Test Case' : 'New Test Case'} destroyOnClose>
-      <Form form={form} layout='vertical' onFinish={(v) => saveMutation.mutate(v)} initialValues={{ testCaseIdCode: '' }}>
+      <Form form={form} layout='vertical' onFinish={(v) => saveMutation.mutate(v)} initialValues={{ testCaseIdCode: '' }} style={{ maxHeight: '60vh', overflow: 'auto', paddingRight: 4 }}>
         <Form.Item name='projectId' label='Project' rules={[{ required: true }]}>
           <Select options={(projects.data?.data || []).map(p => ({ value: p.id, label: p.code }))} loading={projects.isLoading} showSearch optionFilterProp='label' />
         </Form.Item>
-        <Form.Item name='testCaseIdCode' label='Code' rules={[{ required: true }]}><Input /></Form.Item>
+        <Form.Item name='testCaseIdCode' label='Test Case ID' rules={[{ required: true }]}><Input /></Form.Item>
+        <Form.Item name='category' label='Category'><Input /></Form.Item>
+        <Form.Item name='featureName' label='Feature'><Input /></Form.Item>
         <Form.Item name='description' label='Description'><Input.TextArea rows={3} /></Form.Item>
+        <Form.Item name='subFunctionality' label='Sub Functionality'><Input /></Form.Item>
+        <Form.Item name='preRequisite' label='Pre-requisite'><Input /></Form.Item>
+        <Form.Item name='inputData' label='Input Data (JSON)'><Input.TextArea rows={2} /></Form.Item>
+        <Form.Item name='expectedResult' label='Expected Result'><Input.TextArea rows={2} /></Form.Item>
         <Form.Item name='severity' label='Severity'>
           <Select options={(severity.data?.data || []).map(l => ({ value: l.code, label: l.code }))} loading={severity.isLoading} allowClear />
         </Form.Item>
         <Form.Item name='complexity' label='Complexity'>
           <Select options={(complexity.data?.data || []).map(l => ({ value: l.code, label: l.code }))} loading={complexity.isLoading} allowClear />
         </Form.Item>
+        <Form.Item name='actualResult' label='Actual Result'><Input.TextArea rows={2} /></Form.Item>
         <Form.Item name='status' label='Status'>
           <Select options={['Pass','Fail','On_Hold','Not_Applicable','Cannot_be_Executed','Blocked'].map(v => ({ value: v, label: v }))} allowClear />
         </Form.Item>
+        <Form.Item name='defectIdRef' label='Defect ID / Description'><Input /></Form.Item>
+        <Form.Item name='comments' label='Comments'><Input.TextArea rows={2} /></Form.Item>
+        <Form.Item name='labels' label='Labels (CSV)'><Input /></Form.Item>
       </Form>
     </Modal>
     <Modal open={importOpen} title='Import Test Cases' onCancel={() => { setImportOpen(false); setImportResult(null); }} onOk={() => { /* trigger close */ setImportOpen(false); setImportResult(null); }} okText='Close'>

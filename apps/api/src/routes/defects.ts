@@ -10,10 +10,26 @@ const router = Router();
 const baseSchema = z.object({
   projectId: z.number(),
   defectIdCode: z.string().min(1),
+  module: z.string().optional(),
   title: z.string().min(1),
-  severity: z.string().optional(), // dynamic via lookup_values
+  description: z.string().optional(),
+  testData: z.any().optional(),
+  actualResults: z.string().optional(),
+  expectedResults: z.string().optional(),
   priority: z.string().optional(),
-  status: z.string().optional()
+  severity: z.string().optional(),
+  status: z.string().optional(),
+  release: z.string().optional(),
+  assignedToId: z.number().optional(),
+  deliveryDate: z.string().optional(),
+  reportedById: z.number().optional(),
+  labels: z.string().optional(),
+  environment: z.string().optional(),
+  rcaStatus: z.string().optional(),
+  reportedDate: z.string().optional(),
+  closedDate: z.string().optional(),
+  comments: z.string().optional(),
+  triageComments: z.string().optional()
 });
 
 router.get('/', requireAuth, async (req: Request, res: Response) => {
@@ -30,7 +46,11 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
 router.post('/', requireAuth, async (req: Request, res: Response) => {
   const parsed = baseSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid', details: parsed.error.flatten().fieldErrors } });
-  const defect = await prisma.defect.create({ data: parsed.data });
+  const data: any = { ...parsed.data };
+  if (data.reportedDate) data.reportedDate = new Date(data.reportedDate);
+  if (data.closedDate) data.closedDate = new Date(data.closedDate);
+  if (data.deliveryDate) data.deliveryDate = new Date(data.deliveryDate);
+  const defect = await prisma.defect.create({ data });
   res.status(201).json({ success: true, data: defect });
 });
 
@@ -49,7 +69,11 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
         return res.status(400).json({ success: false, error: { code: 'INVALID_TRANSITION', message: `Cannot transition from ${current.status} to ${nextStatus}` } });
       }
     }
-    const updated = await prisma.defect.update({ where: { id }, data: parsed.data });
+  const data: any = { ...parsed.data };
+  if (data.reportedDate) data.reportedDate = new Date(data.reportedDate);
+  if (data.closedDate) data.closedDate = new Date(data.closedDate);
+  if (data.deliveryDate) data.deliveryDate = new Date(data.deliveryDate);
+  const updated = await prisma.defect.update({ where: { id }, data });
     if (parsed.data.status && parsed.data.status !== current.status) {
       await prisma.auditLog.create({ data: { entityType: 'defect', entityId: id, action: 'status_change', beforeJson: { status: current.status }, afterJson: { status: parsed.data.status } } });
     }
@@ -104,7 +128,9 @@ router.get('/export/xlsx', requireAuth, async (req: Request, res: Response) => {
   const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
   const where = projectId ? { projectId } : {};
   const rows = await prisma.defect.findMany({ where, orderBy: { id: 'asc' } });
-  const headers = ['projectId','defectIdCode','title','severity','priority','status'];
+  const headers = [
+    'projectId','defectIdCode','module','title','description','testData','actualResults','expectedResults','priority','severity','status','release','assignedToId','deliveryDate','reportedById','labels','environment','rcaStatus','reportedDate','closedDate','comments','triageComments'
+  ];
   try {
     const { buildWorkbook, workbookToBuffer } = await import('../utils/xlsx');
     const wb = buildWorkbook<any>({ sheetName: 'Defects', headers: headers.map(h => ({ key: h as any, label: h })) }, rows as any);
@@ -122,7 +148,9 @@ router.get('/export/xlsx', requireAuth, async (req: Request, res: Response) => {
 });
 
 router.get('/template/xlsx', requireAuth, async (_req: Request, res: Response) => {
-  const headers = ['projectId','defectIdCode','title','severity','priority','status'];
+  const headers = [
+    'projectId','defectIdCode','module','title','description','testData','actualResults','expectedResults','priority','severity','status','release','assignedToId','deliveryDate','reportedById','labels','environment','rcaStatus','reportedDate','closedDate','comments','triageComments'
+  ];
   try {
     const buf = buildTemplate(headers, 'Defects');
     res.setHeader('Content-Disposition', 'attachment; filename="defects-template.xlsx"');
@@ -146,10 +174,26 @@ router.post('/import/xlsx', requireAuth, upload.single('file'), async (req: Requ
     const parsed = baseSchema.safeParse({
       projectId: Number(raw.projectId),
       defectIdCode: String(raw.defectIdCode || '').trim(),
+      module: raw.module || undefined,
       title: String(raw.title || '').trim(),
-      severity: raw.severity || undefined,
+      description: raw.description || undefined,
+      testData: raw.testData || undefined,
+      actualResults: raw.actualResults || undefined,
+      expectedResults: raw.expectedResults || undefined,
       priority: raw.priority || undefined,
-      status: raw.status || undefined
+      severity: raw.severity || undefined,
+      status: raw.status || undefined,
+      release: raw.release || undefined,
+      assignedToId: raw.assignedToId ? Number(raw.assignedToId) : undefined,
+      deliveryDate: raw.deliveryDate || undefined,
+      reportedById: raw.reportedById ? Number(raw.reportedById) : undefined,
+      labels: raw.labels || undefined,
+      environment: raw.environment || undefined,
+      rcaStatus: raw.rcaStatus || undefined,
+      reportedDate: raw.reportedDate || undefined,
+      closedDate: raw.closedDate || undefined,
+      comments: raw.comments || undefined,
+      triageComments: raw.triageComments || undefined
     });
     if (!parsed.success) {
       failed.push({ row: i + 2, errors: parsed.error.issues.map(is => is.message) });
