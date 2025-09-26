@@ -9,6 +9,8 @@ import { errorHandler } from "./middlewares/error";
 import testCaseRoutes from "./routes/testCases";
 import defectRoutes from "./routes/defects";
 import lookupRoutes from "./routes/lookups";
+import dashboardRoutes from "./routes/dashboard";
+import auditRoutes from "./routes/audit";
 
 const app = express();
 
@@ -26,6 +28,8 @@ app.use("/projects", projectRoutes);
 app.use("/test-cases", testCaseRoutes);
 app.use("/defects", defectRoutes);
 app.use("/lookups", lookupRoutes);
+app.use("/dashboard", dashboardRoutes);
+app.use("/audit", auditRoutes);
 
 app.use(errorHandler);
 

@@ -38,10 +38,23 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
   const parsed = baseSchema.partial().safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid', details: parsed.error.flatten().fieldErrors } });
   try {
+    const current = await prisma.defect.findUnique({ where: { id } });
+    if (!current) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Defect not found' } });
+    // Simple transition rule: cannot move from resolved/closed-like statuses back to inprogress unless 'reopened'
+    const nextStatus = parsed.data.status;
+    if (nextStatus && current.status && current.status !== nextStatus) {
+      const terminal = ['resolved','rejected'];
+      if (terminal.includes(current.status) && !['reopened'].includes(nextStatus)) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_TRANSITION', message: `Cannot transition from ${current.status} to ${nextStatus}` } });
+      }
+    }
     const updated = await prisma.defect.update({ where: { id }, data: parsed.data });
+    if (parsed.data.status && parsed.data.status !== current.status) {
+      await prisma.auditLog.create({ data: { entityType: 'defect', entityId: id, action: 'status_change', beforeJson: { status: current.status }, afterJson: { status: parsed.data.status } } });
+    }
     res.json({ success: true, data: updated });
-  } catch {
-    return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Defect not found' } });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: { code: 'UPDATE_ERROR', message: 'Could not update defect' } });
   }
 });
 
