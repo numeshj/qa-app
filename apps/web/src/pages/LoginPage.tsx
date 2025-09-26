@@ -21,8 +21,12 @@ const LoginPage = () => {
         <Typography.Title level={4} style={{ textAlign: "center" }}>Login</Typography.Title>
         {error && <Alert type="error" message={error} style={{ marginBottom: 16 }} />}
         <Form layout="vertical" onFinish={onFinish} initialValues={{ email: "admin@example.com", password: "password" }}>
-          <Form.Item name="email" label="Email" rules={[{ required: true, message: "Email required" }]}> <Input type="email" /> </Form.Item>
-          <Form.Item name="password" label="Password" rules={[{ required: true, message: "Password required" }]}> <Input.Password /> </Form.Item>
+          <Form.Item name="email" label="Email" rules={[{ required: true, message: "Email required" }]}> 
+            <Input type="email" autoComplete="email" />
+          </Form.Item>
+          <Form.Item name="password" label="Password" rules={[{ required: true, message: "Password required" }]}> 
+            <Input.Password autoComplete="current-password" />
+          </Form.Item>
           <Button block type="primary" htmlType="submit" loading={loading}>Sign In</Button>
         </Form>
       </Card>
