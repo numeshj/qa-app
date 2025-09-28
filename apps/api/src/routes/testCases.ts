@@ -25,6 +25,7 @@ const importUpload = multer({
 const baseSchema = z.object({
   projectId: z.number(),
   testCaseIdCode: z.string().min(1),
+  testCaseFileId: z.number().optional(),
   category: z.string().optional(),
   featureName: z.string().optional(),
   description: z.string().optional(),
@@ -49,13 +50,14 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   if (fileId) where.testCaseFileId = fileId;
   const take = 50; const skip = 0;
   const [list, total] = await Promise.all([
-    prisma.testCase.findMany({ where, take, skip, orderBy: { createdAt: 'desc' }, include: { artifacts: { take: 1, orderBy: { createdAt: 'desc' } } } }),
+  prisma.testCase.findMany({ where, take, skip, orderBy: { createdAt: 'desc' }, include: { artifacts: { take: 1, orderBy: { createdAt: 'desc' } } } }),
     prisma.testCase.count({ where })
   ]);
   const shaped = list.map(tc => {
     const latest = (tc as any).artifacts?.[0] || null;
     return {
       ...tc,
+      testCaseFileName: null,
       artifactCount: (tc as any).artifacts ? (tc as any).artifacts.length === 1 ? 1 : (tc as any).artifacts.length : 0,
       latestArtifact: latest ? { ...latest, filePath: latest.filePath.replace(/\\/g,'/') } : null
     };
@@ -138,7 +140,7 @@ router.get('/export/xlsx', requireAuth, async (req: Request, res: Response) => {
   const where = projectId ? { projectId } : {};
   const rows = await prisma.testCase.findMany({ where, orderBy: { id: 'asc' } });
   const headers = [
-    'projectId','testCaseIdCode','category','featureName','description','subFunctionality','preRequisite','inputData','expectedResult','severity','complexity','actualResult','status','defectIdRef','comments','labels'
+    'projectId','testCaseIdCode','testCaseFileId','category','featureName','description','subFunctionality','preRequisite','inputData','expectedResult','severity','complexity','actualResult','status','defectIdRef','comments','labels'
   ];
   const content = [headers.join(',')]; // CSV fallback if Excel fails later
   // Build workbook
@@ -161,7 +163,7 @@ router.get('/export/xlsx', requireAuth, async (req: Request, res: Response) => {
 
 router.get('/template/xlsx', requireAuth, async (_req: Request, res: Response) => {
   const headers = [
-    'projectId','testCaseIdCode','category','featureName','description','subFunctionality','preRequisite','inputData','expectedResult','severity','complexity','actualResult','status','defectIdRef','comments','labels'
+    'projectId','testCaseIdCode','testCaseFileId','category','featureName','description','subFunctionality','preRequisite','inputData','expectedResult','severity','complexity','actualResult','status','defectIdRef','comments','labels'
   ];
   try {
     const buf = buildTemplate(headers, 'TestCases');
@@ -205,24 +207,25 @@ router.post('/import/xlsx', requireAuth, importUpload.single('file'), async (req
       failed.push({ row: i + 2, errors: [`Invalid project reference '${raw.projectId ?? ''}'. Use numeric projectId or existing project code/name.`] });
       continue;
     }
-    const parsed = baseSchema.safeParse({
-      projectId: resolvedProjectId,
-      testCaseIdCode: String(raw.testCaseIdCode || '').trim(),
-      category: raw.category || undefined,
-      featureName: raw.featureName || undefined,
-      description: raw.description ? String(raw.description) : undefined,
-      subFunctionality: raw.subFunctionality || undefined,
-      preRequisite: raw.preRequisite || undefined,
-      inputData: raw.inputData || undefined,
-      expectedResult: raw.expectedResult || undefined,
-      severity: normSeverity,
-      complexity: normComplexity,
-      actualResult: raw.actualResult || undefined,
-      status: raw.status || undefined,
-      defectIdRef: raw.defectIdRef || undefined,
-      comments: raw.comments || undefined,
-      labels: raw.labels || undefined
-    });
+      const parsed = baseSchema.safeParse({
+        projectId: resolvedProjectId,
+        testCaseIdCode: String(raw.testCaseIdCode || '').trim(),
+        testCaseFileId: raw.testCaseFileId ? Number(raw.testCaseFileId) : undefined,
+        category: raw.category || undefined,
+        featureName: raw.featureName || undefined,
+        description: raw.description ? String(raw.description) : undefined,
+        subFunctionality: raw.subFunctionality || undefined,
+        preRequisite: raw.preRequisite || undefined,
+        inputData: raw.inputData || undefined,
+        expectedResult: raw.expectedResult || undefined,
+        severity: normSeverity,
+        complexity: normComplexity,
+        actualResult: raw.actualResult || undefined,
+        status: raw.status || undefined,
+        defectIdRef: raw.defectIdRef || undefined,
+        comments: raw.comments || undefined,
+        labels: raw.labels || undefined
+      });
     if (!parsed.success) {
       failed.push({ row: i + 2, errors: parsed.error.issues.map(is => is.message) });
       continue;
