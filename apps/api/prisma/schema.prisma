@@ -24,6 +24,7 @@ model User {
   projectsOwned Project[] @relation("ProjectOwner")
   TestCaseCreated TestCase[] @relation("TestCaseCreatedBy")
   TestCaseUpdated TestCase[] @relation("TestCaseUpdatedBy")
+  TestCaseFilesAuthored TestCaseFile[] @relation("TestCaseFileAuthor")
   DefectAssigned Defect[]   @relation("DefectAssignedTo")
   DefectReported Defect[]   @relation("DefectReportedBy")
   auditLogs     AuditLog[]
@@ -71,14 +72,36 @@ model Project {
   ownerId     Int?
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
+  testCaseFiles TestCaseFile[]
   testCases   TestCase[]
   defects     Defect[]
+}
+
+model TestCaseFile {
+  id           Int       @id @default(autoincrement())
+  project      Project   @relation(fields: [projectId], references: [id])
+  projectId    Int
+  name         String
+  version      String?   @default("1.0")
+  environment  String?
+  releaseBuild String?   @map("release_build")
+  refer        String?
+  author       User?     @relation("TestCaseFileAuthor", fields: [authorId], references: [id])
+  authorId     Int?
+  isDeleted    Boolean   @default(false) @map("is_deleted")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  testCases    TestCase[]
+  @@unique([projectId, name])
+  @@map("test_case_files")
 }
 
 model TestCase {
   id             Int       @id @default(autoincrement())
   project        Project   @relation(fields: [projectId], references: [id])
   projectId      Int
+  testCaseFile   TestCaseFile? @relation(fields: [testCaseFileId], references: [id])
+  testCaseFileId Int?
   testCaseIdCode String    @map("test_case_id_code")
   category       String?
   featureName    String?   @map("feature_name")

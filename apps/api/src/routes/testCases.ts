@@ -43,7 +43,10 @@ const baseSchema = z.object({
 
 router.get('/', requireAuth, async (req: Request, res: Response) => {
   const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
-  const where = projectId ? { projectId } : {};
+  const fileId = req.query.fileId ? Number(req.query.fileId) : undefined;
+  const where: any = {};
+  if (projectId) where.projectId = projectId;
+  if (fileId) where.testCaseFileId = fileId;
   const take = 50; const skip = 0;
   const [list, total] = await Promise.all([
     prisma.testCase.findMany({ where, take, skip, orderBy: { createdAt: 'desc' }, include: { artifacts: { take: 1, orderBy: { createdAt: 'desc' } } } }),

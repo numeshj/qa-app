@@ -17,7 +17,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
-    "@prisma/client": "^5.15.0",
+    "@prisma/client": "^5.22.0",
     "argon2": "^0.31.0",
     "axios": "^1.7.7",
     "bcryptjs": "^2.4.3",

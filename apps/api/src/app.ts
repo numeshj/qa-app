@@ -11,6 +11,7 @@ import defectRoutes from "./routes/defects";
 import lookupRoutes from "./routes/lookups";
 import dashboardRoutes from "./routes/dashboard";
 import auditRoutes from "./routes/audit";
+import testCaseFileRoutes from "./routes/testCaseFiles";
 import path from 'path';
 import fs from 'fs';
 import { env } from './config/env';
@@ -37,6 +38,7 @@ app.use("/defects", defectRoutes);
 app.use("/lookups", lookupRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/audit", auditRoutes);
+app.use("/test-case-files", testCaseFileRoutes);
 
 // Ensure upload dir exists then serve statics (basic public serving for now)
 if (!fs.existsSync(env.UPLOAD_DIR)) {
