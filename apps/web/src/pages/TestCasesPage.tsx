@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import { Button, Card, Form, Input, Modal, Select, Space, Table, Upload, message, Tag, Spin, Popconfirm } from 'antd';
+import { Button, Card, Form, Input, Modal, Select, Space, Table, Upload, message, Tag, Spin, Popconfirm, Alert } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { useRef } from 'react';
@@ -42,6 +42,24 @@ const TestCasesPage = () => {
     queryFn: async () => (await api.get(`/test-cases?fileId=${activeFile!.id}`)).data
   });
   const testCaseFiles = useQuery<{ success: boolean; data: TestCaseFile[] }>({ queryKey: ['test-case-files'], queryFn: async () => (await api.get('/test-case-files')).data });
+  // For fallback: fetch unassigned test cases for active file's project (only if we opened a file with zero test cases)
+  const [showAttachPrompt, setShowAttachPrompt] = useState(false);
+  const unassignedQuery = useQuery<{ success: boolean; data: TestCase[] }>({
+    queryKey: ['unassigned-test-cases', activeFile?.projectId],
+    enabled: !!activeFile && showAttachPrompt,
+    queryFn: async () => (await api.get(`/test-cases?projectId=${activeFile!.projectId}`)).data
+  });
+  const bulkAssignMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      // bulk assign sequentially (could be optimized server-side later)
+      for (const id of ids) {
+        await api.put(`/test-cases/${id}`, { testCaseFileId: activeFile!.id });
+      }
+      return { updated: ids.length };
+    },
+    onSuccess: (r) => { message.success(`Attached ${r.updated} test cases`); qc.invalidateQueries({ queryKey: ['test-cases', activeFile?.id] }); setShowAttachPrompt(false); },
+    onError: (e:any) => message.error(e.response?.data?.error?.message || 'Bulk attach failed')
+  });
   const projects = useProjects();
   const severity = useLookup('testcase_severity');
   const complexity = useLookup('testcase_complexity');
@@ -273,7 +291,10 @@ const TestCasesPage = () => {
       { title: 'Created', dataIndex: 'createdAt', render: (v:string)=> new Date(v).toLocaleString(), width: 150 },
       { title: 'Updated', dataIndex: 'updatedAt', render: (v:string)=> new Date(v).toLocaleString(), width: 150 },
       { title: 'Actions', fixed: 'right', render: (_:any, r:TestCaseFile) => <Space>
-          <Button size='small' type='link' onClick={() => setActiveFile(r)}>Open</Button>
+          <Button size='small' type='link' onClick={() => {
+            setActiveFile(r);
+            // Delay check until query resolves; after mount we'll inspect results in effect
+          }}>Open</Button>
           <Button size='small' onClick={() => { setEditingFile(r); fileForm.setFieldsValue(r); setFileModalOpen(true); }}>Edit</Button>
           <Popconfirm title='Delete file?' okText='Yes' cancelText='No' onConfirm={() => deleteFileMutation.mutate(r.id)}>
             <Button danger size='small' loading={deleteFileMutation.isPending && deleteFileMutation.variables === r.id}>Delete</Button>
@@ -315,6 +336,16 @@ const TestCasesPage = () => {
     </div>;
   }
 
+  // When activeFile changes and loads, if the test-cases list is empty, check for unassigned
+  useEffect(() => {
+    if (activeFile && data && data.data.length === 0) {
+      // Show prompt only once per activation
+      setShowAttachPrompt(true);
+    } else if (!activeFile) {
+      setShowAttachPrompt(false);
+    }
+  }, [activeFile, data]);
+
   return <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
   <Card
     styles={{ body: { padding: 12, display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 } }}
@@ -342,6 +373,29 @@ const TestCasesPage = () => {
         } catch(e:any){ message.error('Template download failed'); }
       }}>Template</Button>
     </div>
+    {activeFile && showAttachPrompt && !isLoading && data && data.data.length === 0 && (
+      <Alert
+        type='info'
+        showIcon
+        message='No test cases in this file yet'
+        description={<div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div>
+            {unassignedQuery.isLoading && 'Checking for existing project test cases...'}
+            {unassignedQuery.data && unassignedQuery.data.data.filter(tc => !(tc as any).testCaseFileId).length > 0 && (
+              <>
+                Found {unassignedQuery.data.data.filter(tc => !(tc as any).testCaseFileId).length} test case(s) in the same project not yet attached.<br />
+                <Space>
+                  <Button size='small' loading={bulkAssignMutation.isPending} onClick={() => bulkAssignMutation.mutate(unassignedQuery.data!.data.filter(tc => !(tc as any).testCaseFileId).map(tc => tc.id))}>Attach All</Button>
+                  <Button size='small' onClick={() => setShowAttachPrompt(false)}>Dismiss</Button>
+                </Space>
+              </>
+            )}
+            {unassignedQuery.data && unassignedQuery.data.data.filter(tc => !(tc as any).testCaseFileId).length === 0 && !unassignedQuery.isLoading && 'No unattached test cases in this project.'}
+          </div>
+        </div>}
+        style={{ marginBottom: 12 }}
+      />
+    )}
     <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
       <Table
         size='small'
