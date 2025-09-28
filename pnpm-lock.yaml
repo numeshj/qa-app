@@ -11,7 +11,7 @@ importers:
   apps/api:
     dependencies:
       '@prisma/client':
-        specifier: ^5.15.0
+        specifier: ^5.22.0
         version: 5.22.0(prisma@5.22.0)
       argon2:
         specifier: ^0.31.0
