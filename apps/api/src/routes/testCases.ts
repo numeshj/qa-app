@@ -4,8 +4,23 @@ import { requireAuth } from '../middlewares/auth';
 import { upload } from '../middlewares/upload';
 import { z } from 'zod';
 import { parseSheet, buildTemplate } from '../utils/xlsx';
+import multer from 'multer';
 
 const router = Router();
+
+// Dedicated uploader for data imports (allow .xlsx / .csv) using memory storage
+const importUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (_req, file, cb) => {
+    const allowed = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+      'text/csv'
+    ];
+    if (!allowed.includes(file.mimetype)) return cb(new Error('INVALID_IMPORT_FILE_TYPE'));
+    cb(null, true);
+  }
+});
 
 const baseSchema = z.object({
   projectId: z.number(),
@@ -31,10 +46,18 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   const where = projectId ? { projectId } : {};
   const take = 50; const skip = 0;
   const [list, total] = await Promise.all([
-    prisma.testCase.findMany({ where, take, skip, orderBy: { createdAt: 'desc' } }),
+    prisma.testCase.findMany({ where, take, skip, orderBy: { createdAt: 'desc' }, include: { artifacts: { take: 1, orderBy: { createdAt: 'desc' } } } }),
     prisma.testCase.count({ where })
   ]);
-  res.json({ success: true, data: list, pagination: { total, take, skip } });
+  const shaped = list.map(tc => {
+    const latest = (tc as any).artifacts?.[0] || null;
+    return {
+      ...tc,
+      artifactCount: (tc as any).artifacts ? (tc as any).artifacts.length === 1 ? 1 : (tc as any).artifacts.length : 0,
+      latestArtifact: latest ? { ...latest, filePath: latest.filePath.replace(/\\/g,'/') } : null
+    };
+  });
+  res.json({ success: true, data: shaped, pagination: { total, take, skip } });
 });
 
 router.post('/', requireAuth, async (req: Request, res: Response) => {
@@ -63,10 +86,16 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
 router.post('/:id/artifacts', requireAuth, upload.single('file'), async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   if (!req.file) return res.status(400).json({ success: false, error: { code: 'NO_FILE', message: 'File required' } });
+  // Normalize stored path: keep only path segment relative to upload root (strip leading uploads/ or ./uploads/)
+  let relativePath = req.file.path.replace(/\\/g,'/');
+  const match = relativePath.match(/uploads\/(.*)$/);
+  if (match) relativePath = match[1];
+  // If still contains './', trim it
+  relativePath = relativePath.replace(/^\.\//,'');
   const artifact = await prisma.testCaseArtifact.create({ data: {
     testCaseId: id,
     type: req.file.mimetype.startsWith('video') ? 'video' : 'image',
-    filePath: req.file.path,
+    filePath: relativePath,
     originalName: req.file.originalname,
     mimeType: req.file.mimetype,
     sizeBytes: req.file.size
@@ -77,7 +106,7 @@ router.post('/:id/artifacts', requireAuth, upload.single('file'), async (req: Re
 router.get('/:id/artifacts', requireAuth, async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const list = await prisma.testCaseArtifact.findMany({ where: { testCaseId: id }, orderBy: { createdAt: 'desc' } });
-  res.json({ success: true, data: list });
+  res.json({ success: true, data: list.map(a => ({ ...a, filePath: a.filePath.replace(/\\/g,'/') })) });
 });
 
 router.get('/:id/artifacts/summary', requireAuth, async (req: Request, res: Response) => {
@@ -86,7 +115,8 @@ router.get('/:id/artifacts/summary', requireAuth, async (req: Request, res: Resp
     prisma.testCaseArtifact.count({ where: { testCaseId: id } }),
     prisma.testCaseArtifact.findFirst({ where: { testCaseId: id }, orderBy: { createdAt: 'desc' } })
   ]);
-  res.json({ success: true, data: { count, latest } });
+  const normalizedLatest = latest ? { ...latest, filePath: latest.filePath.replace(/\\/g,'/') } : null;
+  res.json({ success: true, data: { count, latest: normalizedLatest } });
 });
 
 router.delete('/:id/artifacts/:artifactId', requireAuth, async (req: Request, res: Response) => {
@@ -142,16 +172,38 @@ router.get('/template/xlsx', requireAuth, async (_req: Request, res: Response) =
   }
 });
 
-router.post('/import/xlsx', requireAuth, upload.single('file'), async (req: Request, res: Response) => {
+router.post('/import/xlsx', requireAuth, importUpload.single('file'), async (req: Request, res: Response) => {
   if (!req.file) return res.status(400).json({ success: false, error: { code: 'NO_FILE', message: 'File required' } });
-  const buffer = req.file.buffer || req.file.path ? require('fs').readFileSync(req.file.path) : undefined;
-  if (!buffer) return res.status(400).json({ success: false, error: { code: 'READ_ERROR', message: 'Could not read file' } });
+  const buffer: Buffer | undefined = (req.file as any).buffer;
+  if (!buffer) return res.status(400).json({ success: false, error: { code: 'READ_ERROR', message: 'Could not read file buffer' } });
   const { rows, errors } = parseSheet<any>(buffer);
   const created: any[] = []; const failed: any[] = [];
+  // Cache projects for flexible project reference resolution (id, code, or name)
+  const projects = await prisma.project.findMany({ select: { id: true, code: true, name: true } });
+  const projectsByCode = new Map(projects.map(p => [p.code.toLowerCase(), p]));
+  const projectsByName = new Map(projects.map(p => [p.name.toLowerCase(), p]));
+
+  const resolveProjectId = (rawVal: any): number | undefined => {
+    if (rawVal === undefined || rawVal === null || rawVal === '') return undefined;
+    // If numeric-like
+    if (/^\d+$/.test(String(rawVal).trim())) return Number(String(rawVal).trim());
+    const key = String(rawVal).trim().toLowerCase();
+    if (projectsByCode.has(key)) return projectsByCode.get(key)!.id;
+    if (projectsByName.has(key)) return projectsByName.get(key)!.id;
+    return undefined;
+  };
   for (let i = 0; i < rows.length; i++) {
     const raw = rows[i];
+    // Normalize casing for enums
+    const normSeverity = raw.severity ? String(raw.severity).charAt(0).toUpperCase() + String(raw.severity).slice(1).toLowerCase() : undefined;
+    const normComplexity = raw.complexity ? String(raw.complexity).charAt(0).toUpperCase() + String(raw.complexity).slice(1).toLowerCase() : undefined;
+    const resolvedProjectId = resolveProjectId(raw.projectId);
+    if (!resolvedProjectId) {
+      failed.push({ row: i + 2, errors: [`Invalid project reference '${raw.projectId ?? ''}'. Use numeric projectId or existing project code/name.`] });
+      continue;
+    }
     const parsed = baseSchema.safeParse({
-      projectId: Number(raw.projectId),
+      projectId: resolvedProjectId,
       testCaseIdCode: String(raw.testCaseIdCode || '').trim(),
       category: raw.category || undefined,
       featureName: raw.featureName || undefined,
@@ -160,8 +212,8 @@ router.post('/import/xlsx', requireAuth, upload.single('file'), async (req: Requ
       preRequisite: raw.preRequisite || undefined,
       inputData: raw.inputData || undefined,
       expectedResult: raw.expectedResult || undefined,
-      severity: raw.severity || undefined,
-      complexity: raw.complexity || undefined,
+      severity: normSeverity,
+      complexity: normComplexity,
       actualResult: raw.actualResult || undefined,
       status: raw.status || undefined,
       defectIdRef: raw.defectIdRef || undefined,

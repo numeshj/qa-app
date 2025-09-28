@@ -9,7 +9,7 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [form] = Form.useForm();
   const devCreds = [
-    { label: 'Admin', email: 'admin@example.com', password: 'password' }
+    { label: "Admin", email: "admin@example.com", password: "TempPass123!" },
   ];
 
   const onFinish = async (values: any) => {

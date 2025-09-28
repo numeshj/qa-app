@@ -2,7 +2,6 @@ import { Layout, Menu } from "antd";
 import { LogoutOutlined, DashboardOutlined, BugOutlined, FolderOutlined, ExperimentOutlined, FileSearchOutlined } from "@ant-design/icons";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../store/auth";
-import { useEffect } from "react";
 
 const { Sider, Header, Content } = Layout;
 
@@ -19,12 +18,10 @@ export const AppShell = () => {
     { key: "/app/audit", icon: <FileSearchOutlined />, label: <Link to="/app/audit">Audit</Link> }
   ];
 
-  useEffect(() => {
-    if (!user) nav("/login");
-  }, [user, nav]);
+  // Redirect handled by routing guard outside (AuthGate). If user missing, we can render minimal shell.
 
   return (
-    <Layout style={{ minHeight: "100vh" }}>
+  <Layout style={{ minHeight: "100vh", background: '#f5f7fa' }}>
       <Sider breakpoint="lg" collapsedWidth="0">
         <div style={{ color: "white", padding: 16, fontWeight: 600 }}>QA App</div>
         <Menu theme="dark" mode="inline" selectedKeys={[loc.pathname]} items={items} />
@@ -36,8 +33,10 @@ export const AppShell = () => {
             <LogoutOutlined /> Logout
           </div>
         </Header>
-        <Content style={{ margin: 16 }}>
-          <Outlet />
+        <Content style={{ margin: 16, background: '#fff', padding: 12, borderRadius: 6, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <Outlet />
+          </div>
         </Content>
       </Layout>
     </Layout>
