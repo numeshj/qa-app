@@ -57,7 +57,7 @@ const TestCasesPage = () => {
       }
       return { updated: ids.length };
     },
-    onSuccess: (r) => { message.success(`Attached ${r.updated} test cases`); qc.invalidateQueries({ queryKey: ['test-cases', activeFile?.id] }); setShowAttachPrompt(false); },
+    onSuccess: (r) => { message.success(`Attached ${r.updated} test cases`); qc.invalidateQueries({ queryKey: ['test-cases', activeFile?.id] }); qc.invalidateQueries({ queryKey: ['test-case-files'] }); setShowAttachPrompt(false); },
     onError: (e:any) => message.error(e.response?.data?.error?.message || 'Bulk attach failed')
   });
   const projects = useProjects();
@@ -173,7 +173,7 @@ const TestCasesPage = () => {
       await api.put(`/test-cases/${id}`, payload);
       message.success('Updated');
       cancelEdit(id);
-      qc.invalidateQueries({ queryKey: ['test-cases'] });
+      qc.invalidateQueries({ queryKey: ['test-cases', activeFile?.id] });
     } catch (e: any) {
       message.error(e.response?.data?.error?.message || 'Update failed');
     }
@@ -277,7 +277,16 @@ const TestCasesPage = () => {
 
   // File upload (artifacts) minimal: open upload modal per row in future (placeholder)
   // For simplicity left out artifact UI for now.
-  // If no file selected, show file list first
+  // When activeFile changes and loads, if the test-cases list is empty, check for unassigned
+  useEffect(() => {
+    if (activeFile && data && data.data.length === 0) {
+      setShowAttachPrompt(true);
+    } else if (!activeFile) {
+      setShowAttachPrompt(false);
+    }
+  }, [activeFile, data]);
+
+  // If no file selected, show file list first (early return AFTER all hooks declared above)
   if (!activeFile) {
     const fileColumns = [
       { title: 'Project', dataIndex: 'projectId', render: (v:number) => projects.data?.data.find(p=>p.id===v)?.code },
@@ -335,16 +344,6 @@ const TestCasesPage = () => {
       </Modal>
     </div>;
   }
-
-  // When activeFile changes and loads, if the test-cases list is empty, check for unassigned
-  useEffect(() => {
-    if (activeFile && data && data.data.length === 0) {
-      // Show prompt only once per activation
-      setShowAttachPrompt(true);
-    } else if (!activeFile) {
-      setShowAttachPrompt(false);
-    }
-  }, [activeFile, data]);
 
   return <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
   <Card
