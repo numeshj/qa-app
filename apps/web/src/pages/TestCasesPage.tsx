@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import { Button, Card, Form, Input, Modal, Select, Space, Table, Upload, message, Tag, Spin } from 'antd';
+import { Button, Card, Form, Input, Modal, Select, Space, Table, Upload, message, Tag, Spin, Popconfirm } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { useRef } from 'react';
@@ -9,6 +9,20 @@ import { useEffect } from 'react';
 
 interface TestCase { id: number; testCaseIdCode: string; description?: string | null; severity?: string | null; complexity?: string | null; projectId: number; }
 interface Project { id: number; code: string; name: string; }
+interface TestCaseFile {
+  id: number;
+  name: string;
+  projectId: number;
+  version?: string | null;
+  environment?: string | null;
+  releaseBuild?: string | null;
+  refer?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { testCases: number };
+  author?: { name?: string | null };
+  isDeleted?: boolean;
+}
 
 const useProjects = () => useQuery<{ success: boolean; data: Project[] }>({ queryKey: ['projects'], queryFn: async () => (await api.get('/projects')).data });
 const useLookup = (category: string) => useQuery<{ success: boolean; data: any[] }>({ queryKey: ['lookup', category], queryFn: async () => (await api.get(`/lookups/${category}`)).data });
@@ -20,12 +34,22 @@ const TestCasesPage = () => {
     return `${base}/files/${cleaned}`;
   };
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery<{ success: boolean; data: TestCase[] }>({ queryKey: ['test-cases'], queryFn: async () => (await api.get('/test-cases')).data });
+  // Selected file gating test cases
+  const [activeFile, setActiveFile] = useState<TestCaseFile | null>(null);
+  const { data, isLoading } = useQuery<{ success: boolean; data: TestCase[] }>({
+    queryKey: ['test-cases', activeFile?.id],
+    enabled: !!activeFile,
+    queryFn: async () => (await api.get(`/test-cases?fileId=${activeFile!.id}`)).data
+  });
+  const testCaseFiles = useQuery<{ success: boolean; data: TestCaseFile[] }>({ queryKey: ['test-case-files'], queryFn: async () => (await api.get('/test-case-files')).data });
   const projects = useProjects();
   const severity = useLookup('testcase_severity');
   const complexity = useLookup('testcase_complexity');
 
   const [open, setOpen] = useState(false); // retained for creating new only
+  const [fileModalOpen, setFileModalOpen] = useState(false);
+  const [editingFile, setEditingFile] = useState<TestCaseFile | null>(null);
+  const [fileForm] = Form.useForm();
   const [editing, setEditing] = useState<TestCase | null>(null); // for create modal only
   const [form] = Form.useForm();
   const [rowEdits, setRowEdits] = useState<Record<number, any>>({});
@@ -88,12 +112,33 @@ const TestCasesPage = () => {
 
   const saveMutation = useMutation({
     mutationFn: async (values: any) => {
-      const payload = { ...values, projectId: Number(values.projectId) };
+      if (!activeFile) throw new Error('Select a Test Case File first');
+      const payload = { ...values, projectId: Number(values.projectId), testCaseFileId: activeFile.id };
       if (editing) return (await api.put(`/test-cases/${editing.id}`, payload)).data;
       return (await api.post('/test-cases', payload)).data;
     },
-    onSuccess: () => { message.success('Saved'); setOpen(false); setEditing(null); form.resetFields(); qc.invalidateQueries({ queryKey: ['test-cases'] }); },
+    onSuccess: () => { message.success('Saved'); setOpen(false); setEditing(null); form.resetFields(); qc.invalidateQueries({ queryKey: ['test-cases', activeFile?.id] }); },
     onError: (e: any) => message.error(e.response?.data?.error?.message || 'Failed')
+  });
+
+  const saveFileMutation = useMutation({
+    mutationFn: async (values: any) => {
+      const payload = { ...values, projectId: Number(values.projectId) };
+      if (editingFile) return (await api.put(`/test-case-files/${editingFile.id}`, payload)).data;
+      return (await api.post('/test-case-files', payload)).data;
+    },
+    onSuccess: () => { message.success('File saved'); setFileModalOpen(false); setEditingFile(null); fileForm.resetFields(); qc.invalidateQueries({ queryKey: ['test-case-files'] }); },
+    onError: (e:any) => message.error(e.response?.data?.error?.message || 'File save failed')
+  });
+
+  const deleteFileMutation = useMutation({
+    mutationFn: async (id: number) => (await api.delete(`/test-case-files/${id}`)).data,
+    onSuccess: (_d, id) => {
+      message.success('File deleted');
+      if (activeFile?.id === id) setActiveFile(null);
+      qc.invalidateQueries({ queryKey: ['test-case-files'] });
+    },
+    onError: (e:any) => message.error(e.response?.data?.error?.message || 'Delete failed')
   });
 
   const isRowEditing = (id: number) => editingRowId === id;
@@ -214,12 +259,70 @@ const TestCasesPage = () => {
 
   // File upload (artifacts) minimal: open upload modal per row in future (placeholder)
   // For simplicity left out artifact UI for now.
+  // If no file selected, show file list first
+  if (!activeFile) {
+    const fileColumns = [
+      { title: 'Project', dataIndex: 'projectId', render: (v:number) => projects.data?.data.find(p=>p.id===v)?.code },
+      { title: 'File Name', dataIndex: 'name' },
+      { title: 'Version', dataIndex: 'version' },
+      { title: 'Environment', dataIndex: 'environment' },
+      { title: 'Release/Build', dataIndex: 'releaseBuild' },
+      { title: 'Refer', dataIndex: 'refer', width: 120 },
+      { title: 'Test Cases', dataIndex: ['_count','testCases'], render: (_:any,r:TestCaseFile)=> r._count?.testCases ?? 0 },
+      { title: 'Author', dataIndex: ['author','name'], render: (_:any,r:TestCaseFile)=> r.author?.name || '' },
+      { title: 'Created', dataIndex: 'createdAt', render: (v:string)=> new Date(v).toLocaleString(), width: 150 },
+      { title: 'Updated', dataIndex: 'updatedAt', render: (v:string)=> new Date(v).toLocaleString(), width: 150 },
+      { title: 'Actions', fixed: 'right', render: (_:any, r:TestCaseFile) => <Space>
+          <Button size='small' type='link' onClick={() => setActiveFile(r)}>Open</Button>
+          <Button size='small' onClick={() => { setEditingFile(r); fileForm.setFieldsValue(r); setFileModalOpen(true); }}>Edit</Button>
+          <Popconfirm title='Delete file?' okText='Yes' cancelText='No' onConfirm={() => deleteFileMutation.mutate(r.id)}>
+            <Button danger size='small' loading={deleteFileMutation.isPending && deleteFileMutation.variables === r.id}>Delete</Button>
+          </Popconfirm>
+        </Space>, width: 160 }
+    ];
+    return <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+      <Card
+        title='Test Case Files'
+        extra={<Button type='primary' onClick={() => { setEditingFile(null); fileForm.resetFields(); setFileModalOpen(true); }}>New File</Button>}
+        styles={{ body: { padding: 12, display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 } }}
+        style={{ flex: 1, minHeight: 0 }}
+      >
+        <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+          <Table
+            rowKey='id'
+            size='small'
+            loading={testCaseFiles.isLoading}
+            dataSource={testCaseFiles.data?.data || []}
+            columns={fileColumns as any}
+            pagination={false}
+            onRow={(r) => ({ onDoubleClick: () => setActiveFile(r) })}
+            scroll={{ x: 1200 }}
+          />
+        </div>
+      </Card>
+      <Modal open={fileModalOpen} onCancel={() => setFileModalOpen(false)} onOk={() => fileForm.submit()} title={editingFile ? 'Edit Test Case File' : 'New Test Case File'} destroyOnHidden>
+        <Form form={fileForm} layout='vertical' onFinish={(v)=> saveFileMutation.mutate(v)} initialValues={{ version: '1.0' }}>
+          <Form.Item name='projectId' label='Project' rules={[{ required: true }]}>
+            <Select options={(projects.data?.data || []).map(p => ({ value: p.id, label: `${p.code}` }))} loading={projects.isLoading} showSearch optionFilterProp='label' />
+          </Form.Item>
+          <Form.Item name='name' label='File Name' rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name='version' label='Version'><Input /></Form.Item>
+            <Form.Item name='environment' label='Environment'><Input /></Form.Item>
+            <Form.Item name='releaseBuild' label='Release / Build'><Input /></Form.Item>
+            <Form.Item name='refer' label='Refer'><Input /></Form.Item>
+        </Form>
+      </Modal>
+    </div>;
+  }
 
   return <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
   <Card
     styles={{ body: { padding: 12, display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 } }}
-    title='Test Cases'
-    extra={<Button type='primary' onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }}>New</Button>}
+    title={`Test Cases - ${activeFile?.name || ''}`}
+    extra={<Space>
+      <Button onClick={() => setActiveFile(null)}>Back to Files</Button>
+      <Button type='primary' onClick={() => { if (!activeFile) { message.warning('Select a file first'); return; } setEditing(null); form.resetFields(); if (activeFile) form.setFieldsValue({ projectId: activeFile.projectId }); setOpen(true); }}>New</Button>
+    </Space>}
     style={{ flex: 1, minHeight: 0 }}
   >
     <div style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -252,9 +355,9 @@ const TestCasesPage = () => {
       />
     </div>
   <Modal open={open} onCancel={() => setOpen(false)} onOk={() => form.submit()} title={editing ? 'Edit Test Case' : 'New Test Case'} destroyOnHidden>
-      <Form form={form} layout='vertical' onFinish={(v) => saveMutation.mutate(v)} initialValues={{ testCaseIdCode: '' }} style={{ maxHeight: '60vh', overflow: 'auto', paddingRight: 4 }}>
+      <Form form={form} layout='vertical' onFinish={(v) => saveMutation.mutate(v)} initialValues={{ testCaseIdCode: '', projectId: activeFile?.projectId }} style={{ maxHeight: '60vh', overflow: 'auto', paddingRight: 4 }}>
         <Form.Item name='projectId' label='Project' rules={[{ required: true }]}>
-          <Select options={(projects.data?.data || []).map(p => ({ value: p.id, label: p.code }))} loading={projects.isLoading} showSearch optionFilterProp='label' />
+          <Select disabled={!!activeFile} options={(projects.data?.data || []).map(p => ({ value: p.id, label: p.code }))} loading={projects.isLoading} showSearch optionFilterProp='label' />
         </Form.Item>
         <Form.Item name='testCaseIdCode' label='Test Case ID' rules={[{ required: true }]}><Input /></Form.Item>
         <Form.Item name='category' label='Category'><Input /></Form.Item>
