@@ -7,7 +7,7 @@ import { useRef } from 'react';
 import type { UploadFile } from 'antd/es/upload/interface';
 import { useEffect } from 'react';
 
-interface TestCase { id: number; testCaseIdCode: string; description?: string | null; severity?: string | null; complexity?: string | null; projectId: number; }
+interface TestCase { id: number; testCaseIdCode: string; description?: string | null; severity?: string | null; complexity?: string | null; projectId: number; testCaseFileId?: number | null; testCaseFileName?: string | null; }
 interface Project { id: number; code: string; name: string; }
 interface TestCaseFile {
   id: number;
@@ -221,7 +221,9 @@ const TestCasesPage = () => {
   };
 
   const columns = [
-    { title: 'Proj', dataIndex: 'projectId', width: 70, render: (v: number) => projects.data?.data.find(p => p.id === v)?.code },
+  { title: 'Proj', dataIndex: 'projectId', width: 70, render: (v: number) => projects.data?.data.find(p => p.id === v)?.code },
+  { title: 'File Id', dataIndex: 'testCaseFileId', width: 80 },
+  { title: 'File Name', dataIndex: 'testCaseFileName', width: 160 },
     editableText('testCaseIdCode', 120),
     editableText('category'),
     editableText('featureName'),
@@ -408,9 +410,15 @@ const TestCasesPage = () => {
       />
     </div>
   <Modal open={open} onCancel={() => setOpen(false)} onOk={() => form.submit()} title={editing ? 'Edit Test Case' : 'New Test Case'} destroyOnHidden>
-      <Form form={form} layout='vertical' onFinish={(v) => saveMutation.mutate(v)} initialValues={{ testCaseIdCode: '', projectId: activeFile?.projectId }} style={{ maxHeight: '60vh', overflow: 'auto', paddingRight: 4 }}>
+      <Form form={form} layout='vertical' onFinish={(v) => saveMutation.mutate(v)} initialValues={{ testCaseIdCode: '', projectId: activeFile?.projectId, testCaseFileId: activeFile?.id }} style={{ maxHeight: '60vh', overflow: 'auto', paddingRight: 4 }}>
         <Form.Item name='projectId' label='Project' rules={[{ required: true }]}>
           <Select disabled={!!activeFile} options={(projects.data?.data || []).map(p => ({ value: p.id, label: p.code }))} loading={projects.isLoading} showSearch optionFilterProp='label' />
+        </Form.Item>
+        <Form.Item name='testCaseFileId' label='Test Case File Id'>
+          <Input disabled value={activeFile?.id} />
+        </Form.Item>
+        <Form.Item label='Test Case File Name'>
+          <Input disabled value={activeFile?.name} />
         </Form.Item>
         <Form.Item name='testCaseIdCode' label='Test Case ID' rules={[{ required: true }]}><Input /></Form.Item>
         <Form.Item name='category' label='Category'><Input /></Form.Item>
