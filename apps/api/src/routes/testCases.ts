@@ -140,7 +140,7 @@ router.get('/export/xlsx', requireAuth, async (req: Request, res: Response) => {
   const where = projectId ? { projectId } : {};
   const rows = await prisma.testCase.findMany({ where, orderBy: { id: 'asc' } });
   const headers = [
-    'projectId','testCaseIdCode','testCaseFileId','category','featureName','description','subFunctionality','preRequisite','inputData','expectedResult','severity','complexity','actualResult','status','defectIdRef','comments','labels'
+    'projectId','testCaseIdCode','testCaseFileId','testCaseFileName','category','featureName','description','subFunctionality','preRequisite','inputData','expectedResult','severity','complexity','actualResult','status','defectIdRef','comments','labels'
   ];
   const content = [headers.join(',')]; // CSV fallback if Excel fails later
   // Build workbook
@@ -163,7 +163,7 @@ router.get('/export/xlsx', requireAuth, async (req: Request, res: Response) => {
 
 router.get('/template/xlsx', requireAuth, async (_req: Request, res: Response) => {
   const headers = [
-    'projectId','testCaseIdCode','testCaseFileId','category','featureName','description','subFunctionality','preRequisite','inputData','expectedResult','severity','complexity','actualResult','status','defectIdRef','comments','labels'
+    'projectId','testCaseIdCode','testCaseFileId','testCaseFileName','category','featureName','description','subFunctionality','preRequisite','inputData','expectedResult','severity','complexity','actualResult','status','defectIdRef','comments','labels'
   ];
   try {
     const buf = buildTemplate(headers, 'TestCases');
@@ -187,6 +187,17 @@ router.post('/import/xlsx', requireAuth, importUpload.single('file'), async (req
   const projects = await prisma.project.findMany({ select: { id: true, code: true, name: true } });
   const projectsByCode = new Map(projects.map(p => [p.code.toLowerCase(), p]));
   const projectsByName = new Map(projects.map(p => [p.name.toLowerCase(), p]));
+  // Attempt to cache test case files for lookup; if delegate missing skip name resolution
+  let filesById: Map<number, any> | null = null;
+  let fileByProjectAndName: Map<string, any> | null = null;
+  const anyPrisma: any = prisma as any;
+  if (anyPrisma.testCaseFile) {
+    try {
+      const files = await anyPrisma.testCaseFile.findMany({ select: { id: true, name: true, projectId: true, isDeleted: true } });
+      filesById = new Map(files.map((f: any) => [f.id, f]));
+      fileByProjectAndName = new Map(files.map((f: any) => [`${f.projectId}::${(f.name||'').toLowerCase()}`, f]));
+    } catch { /* ignore */ }
+  }
 
   const resolveProjectId = (rawVal: any): number | undefined => {
     if (rawVal === undefined || rawVal === null || rawVal === '') return undefined;
@@ -207,10 +218,28 @@ router.post('/import/xlsx', requireAuth, importUpload.single('file'), async (req
       failed.push({ row: i + 2, errors: [`Invalid project reference '${raw.projectId ?? ''}'. Use numeric projectId or existing project code/name.`] });
       continue;
     }
+    // Resolve testCaseFileId: prefer explicit numeric id; else by name within project if provided
+    let testCaseFileId: number | undefined = undefined;
+    if (raw.testCaseFileId && /^\d+$/.test(String(raw.testCaseFileId).trim())) {
+      const idNum = Number(String(raw.testCaseFileId).trim());
+      if (!filesById || filesById.has(idNum)) testCaseFileId = idNum; else {
+        failed.push({ row: i + 2, errors: [`Unknown testCaseFileId '${raw.testCaseFileId}'`] });
+        continue;
+      }
+    } else if (raw.testCaseFileName) {
+      const key = `${resolvedProjectId}::${String(raw.testCaseFileName).trim().toLowerCase()}`;
+      if (!fileByProjectAndName || fileByProjectAndName.has(key)) {
+        testCaseFileId = fileByProjectAndName ? fileByProjectAndName.get(key)?.id : undefined;
+        if (fileByProjectAndName && !testCaseFileId) {
+          failed.push({ row: i + 2, errors: [`Unknown testCaseFileName '${raw.testCaseFileName}' for project ${resolvedProjectId}`] });
+          continue;
+        }
+      }
+    }
       const parsed = baseSchema.safeParse({
         projectId: resolvedProjectId,
         testCaseIdCode: String(raw.testCaseIdCode || '').trim(),
-        testCaseFileId: raw.testCaseFileId ? Number(raw.testCaseFileId) : undefined,
+  testCaseFileId,
         category: raw.category || undefined,
         featureName: raw.featureName || undefined,
         description: raw.description ? String(raw.description) : undefined,

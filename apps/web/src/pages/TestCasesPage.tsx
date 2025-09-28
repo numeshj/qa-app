@@ -447,6 +447,9 @@ const TestCasesPage = () => {
       <Upload beforeUpload={() => false} maxCount={1} onChange={({ fileList }) => setFileList(fileList)} fileList={fileList} accept='.xlsx,.csv'>
         <Button icon={<UploadOutlined />}>Select File</Button>
       </Upload>
+      <div style={{ marginTop: 8, fontSize: 12, lineHeight: 1.4, color: '#555' }}>
+        Template columns now include: <code>projectId</code>, <code>testCaseIdCode</code>, <code>testCaseFileId</code>, <code>testCaseFileName</code>, plus existing fields. You may supply either testCaseFileId or testCaseFileName (scoped by project). If this modal was opened while a file is selected, leaving both blank will still attach via the active file.
+      </div>
       <Button disabled={!fileList.length} loading={importing} style={{ marginTop: 12 }} onClick={async () => {
         if (!fileList.length) return; setImporting(true);
         try {
