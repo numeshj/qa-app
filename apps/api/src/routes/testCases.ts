@@ -50,14 +50,14 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   if (fileId) where.testCaseFileId = fileId;
   const take = 50; const skip = 0;
   const [list, total] = await Promise.all([
-  prisma.testCase.findMany({ where, take, skip, orderBy: { createdAt: 'desc' }, include: { artifacts: { take: 1, orderBy: { createdAt: 'desc' } } } }),
+  (prisma as any).testCase.findMany({ where, take, skip, orderBy: { createdAt: 'desc' }, include: { artifacts: { take: 1, orderBy: { createdAt: 'desc' } }, testCaseFile: { select: { id: true, name: true } } } }),
     prisma.testCase.count({ where })
   ]);
-  const shaped = list.map(tc => {
+  const shaped = (list as any[]).map((tc: any) => {
     const latest = (tc as any).artifacts?.[0] || null;
     return {
       ...tc,
-      testCaseFileName: null,
+      testCaseFileName: (tc as any).testCaseFile?.name || null,
       artifactCount: (tc as any).artifacts ? (tc as any).artifacts.length === 1 ? 1 : (tc as any).artifacts.length : 0,
       latestArtifact: latest ? { ...latest, filePath: latest.filePath.replace(/\\/g,'/') } : null
     };
