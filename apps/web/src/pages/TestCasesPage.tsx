@@ -273,6 +273,17 @@ const TestCasesPage = () => {
           const url = buildArtifactUrl(latest.filePath);
           setArtifactPreview({ open: true, url, type: latest.mimeType });
         }}>View</Button>}
+        <Popconfirm title='Delete test case?' okText='Yes' cancelText='No' onConfirm={async () => {
+          try {
+            await api.delete(`/test-cases/${r.id}`);
+            message.success('Deleted');
+            qc.invalidateQueries({ queryKey: ['test-cases', activeFile?.id] });
+          } catch (e:any) {
+            message.error(e.response?.data?.error?.message || 'Delete failed');
+          }
+        }}>
+          <Button size='small' danger>Delete</Button>
+        </Popconfirm>
       </Space>;
     }, width: 180 }
   ];

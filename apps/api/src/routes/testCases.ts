@@ -48,6 +48,8 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   const where: any = {};
   if (projectId) where.projectId = projectId;
   if (fileId) where.testCaseFileId = fileId;
+  // Soft delete filter
+  (where as any).isDeleted = false;
   const take = 50; const skip = 0;
   const [list, total] = await Promise.all([
   (prisma as any).testCase.findMany({ where, take, skip, orderBy: { createdAt: 'desc' }, include: { artifacts: { take: 1, orderBy: { createdAt: 'desc' } }, testCaseFile: { select: { id: true, name: true } } } }),
@@ -84,6 +86,21 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
     res.json({ success: true, data: updated });
   } catch {
     return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Test case not found' } });
+  }
+});
+
+// Soft delete a test case
+router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  try {
+    const existing = await prisma.testCase.findUnique({ where: { id } });
+    if (!existing || (existing as any).isDeleted) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Test case not found' } });
+    }
+  await prisma.testCase.update({ where: { id }, data: { isDeleted: true } as any });
+    res.json({ success: true, data: { deleted: true } });
+  } catch {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: 'Failed to delete test case' } });
   }
 });
 
@@ -137,10 +154,11 @@ router.delete('/:id/artifacts/:artifactId', requireAuth, async (req: Request, re
 // Import / Export endpoints
 router.get('/export/xlsx', requireAuth, async (req: Request, res: Response) => {
   const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
-  const where = projectId ? { projectId } : {};
+  const where: any = projectId ? { projectId } : {};
+  (where as any).isDeleted = false;
   const rows = await prisma.testCase.findMany({ where, orderBy: { id: 'asc' } });
   const headers = [
-    'projectId','testCaseIdCode','testCaseFileId','testCaseFileName','category','featureName','description','subFunctionality','preRequisite','inputData','expectedResult','severity','complexity','actualResult','status','defectIdRef','comments','labels'
+    'projectId','testCaseIdCode','testCaseFileId','testCaseFileName','category','featureName','description','subFunctionality','preRequisite','inputData','expectedResult','severity','complexity','actualResult','status','defectIdRef','comments','labels','isDeleted'
   ];
   const content = [headers.join(',')]; // CSV fallback if Excel fails later
   // Build workbook
