@@ -62,7 +62,9 @@ router.get('/', requireAuth, asyncHandler(async (req: Request, res: Response, _n
   const take = 50; const skip = 0;
   let list: any[] = [];
   let total = 0;
+  const debug = req.query.__debug === '1';
   try {
+    if (debug) console.log('[test-cases:list] primary query where=', JSON.stringify(where));
     [list, total] = await Promise.all([
       (prisma as any).testCase.findMany({ where, take, skip, orderBy: { createdAt: 'desc' }, include: { artifacts: { take: 1, orderBy: { createdAt: 'desc' } }, testCaseFile: { select: { id: true, name: true } } } }),
       prisma.testCase.count({ where })
@@ -73,7 +75,16 @@ router.get('/', requireAuth, asyncHandler(async (req: Request, res: Response, _n
     if (msg.includes('unknown column') && msg.includes('is_deleted')) {
       return res.status(500).json({ success: false, error: { code: 'MIGRATION_REQUIRED', message: 'Database schema is missing is_deleted column. Run latest Prisma migrations.' } });
     }
-    return res.status(500).json({ success: false, error: { code: 'DB_ERROR', message: 'Failed to load test cases' } });
+    // Fallback simpler query without include to isolate issue (maybe relation or column)
+    try {
+      if (debug) console.log('[test-cases:list] attempting fallback simple query');
+      list = await (prisma as any).testCase.findMany({ where, take, skip, orderBy: { createdAt: 'desc' } });
+      total = await prisma.testCase.count({ where });
+      if (debug) console.log('[test-cases:list] fallback succeeded listLen=', list.length);
+    } catch (fallbackErr: any) {
+      console.error('[test-cases:list] fallback failed', fallbackErr);
+      return res.status(500).json({ success: false, error: { code: 'DB_ERROR', message: 'Failed to load test cases', debug: debug ? { primary: msg, fallback: String(fallbackErr?.message||'') } : undefined } });
+    }
   }
   const shaped = (list as any[]).map((tc: any) => {
     const latest = (tc as any).artifacts?.[0] || null;
@@ -84,7 +95,7 @@ router.get('/', requireAuth, asyncHandler(async (req: Request, res: Response, _n
       latestArtifact: latest ? { ...latest, filePath: latest.filePath.replace(/\\/g,'/') } : null
     };
   });
-  return res.json({ success: true, data: shaped, pagination: { total, take, skip } });
+  return res.json({ success: true, data: shaped, pagination: { total, take, skip }, debug: debug ? { where } : undefined });
 }));
 
 router.post('/', requireAuth, async (req: Request, res: Response) => {
