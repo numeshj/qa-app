@@ -1,9 +1,10 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middlewares/auth';
 import { upload } from '../middlewares/upload';
 import { z } from 'zod';
 import { parseSheet, buildTemplate } from '../utils/xlsx';
+import { asyncHandler } from '../utils/asyncHandler';
 import multer from 'multer';
 
 const router = Router();
@@ -42,30 +43,45 @@ const baseSchema = z.object({
   labels: z.string().optional()
 });
 
-router.get('/', requireAuth, async (req: Request, res: Response) => {
-  const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
-  const fileId = req.query.fileId ? Number(req.query.fileId) : undefined;
+// Query validation to avoid NaN / invalid values triggering ORM errors and crashing server
+const listQuerySchema = z.object({
+  projectId: z.preprocess(val => val === undefined ? undefined : Number(val), z.number().int().positive().optional()).optional(),
+  fileId: z.preprocess(val => val === undefined ? undefined : Number(val), z.number().int().positive().optional()).optional()
+}).partial();
+
+router.get('/', requireAuth, asyncHandler(async (req: Request, res: Response, _next: NextFunction) => {
+  const parsed = listQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid query params', details: parsed.error.flatten().fieldErrors } });
+  }
+  const { projectId, fileId } = parsed.data as any;
   const where: any = {};
   if (projectId) where.projectId = projectId;
   if (fileId) where.testCaseFileId = fileId;
-  // Soft delete filter
   (where as any).isDeleted = false;
   const take = 50; const skip = 0;
-  const [list, total] = await Promise.all([
-  (prisma as any).testCase.findMany({ where, take, skip, orderBy: { createdAt: 'desc' }, include: { artifacts: { take: 1, orderBy: { createdAt: 'desc' } }, testCaseFile: { select: { id: true, name: true } } } }),
-    prisma.testCase.count({ where })
-  ]);
+  let list: any[] = [];
+  let total = 0;
+  try {
+    [list, total] = await Promise.all([
+      (prisma as any).testCase.findMany({ where, take, skip, orderBy: { createdAt: 'desc' }, include: { artifacts: { take: 1, orderBy: { createdAt: 'desc' } }, testCaseFile: { select: { id: true, name: true } } } }),
+      prisma.testCase.count({ where })
+    ]);
+  } catch (err: any) {
+    console.error('[test-cases:list] query failed', err);
+    return res.status(500).json({ success: false, error: { code: 'DB_ERROR', message: 'Failed to load test cases' } });
+  }
   const shaped = (list as any[]).map((tc: any) => {
     const latest = (tc as any).artifacts?.[0] || null;
     return {
       ...tc,
       testCaseFileName: (tc as any).testCaseFile?.name || null,
-      artifactCount: (tc as any).artifacts ? (tc as any).artifacts.length === 1 ? 1 : (tc as any).artifacts.length : 0,
+      artifactCount: (tc as any).artifacts ? ((tc as any).artifacts.length === 1 ? 1 : (tc as any).artifacts.length) : 0,
       latestArtifact: latest ? { ...latest, filePath: latest.filePath.replace(/\\/g,'/') } : null
     };
   });
-  res.json({ success: true, data: shaped, pagination: { total, take, skip } });
-});
+  return res.json({ success: true, data: shaped, pagination: { total, take, skip } });
+}));
 
 router.post('/', requireAuth, async (req: Request, res: Response) => {
   const parsed = baseSchema.safeParse(req.body);
