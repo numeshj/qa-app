@@ -1,4 +1,5 @@
 import axios from "axios";
+import { useSystem } from '../store/system';
 
 // Backend currently mounts routes at root (e.g. /auth, /projects). Remove /api suffix here.
 export const api = axios.create({
@@ -16,8 +17,16 @@ api.interceptors.request.use((config) => {
 });
 
 api.interceptors.response.use(
-  (r) => r,
+  (r) => {
+    // Any successful response implies backend reachable
+    try { useSystem.getState().setOnline(true); } catch { /* ignore */ }
+    return r;
+  },
   async (error) => {
+    // Network or CORS refusal -> mark offline
+    if (error.code === 'ERR_NETWORK' || error.message?.includes('Network') || error.message?.includes('timeout')) {
+      try { useSystem.getState().setOnline(false); } catch { /* ignore */ }
+    }
     if (error.response?.status === 401) {
       // try refresh
       try {
@@ -29,6 +38,7 @@ api.interceptors.response.use(
           );
           localStorage.setItem("accessToken", res.data.data.accessToken);
           error.config.headers["Authorization"] = `Bearer ${res.data.data.accessToken}`;
+          try { useSystem.getState().setOnline(true); } catch { /* ignore */ }
           return api.request(error.config);
         }
       } catch (_) {
