@@ -83,7 +83,7 @@ router.get('/', requireAuth, asyncHandler(async (req: Request, res: Response, _n
       if (debug) console.log('[test-cases:list] fallback succeeded listLen=', list.length);
     } catch (fallbackErr: any) {
       console.error('[test-cases:list] fallback failed', fallbackErr);
-      return res.status(500).json({ success: false, error: { code: 'DB_ERROR', message: 'Failed to load test cases', debug: debug ? { primary: msg, fallback: String(fallbackErr?.message||'') } : undefined } });
+      return res.status(500).json({ success: false, error: { code: 'DB_ERROR', message: 'Failed to load test cases', debug: debug ? { primary: { message: err?.message, code: err?.code }, fallback: { message: fallbackErr?.message, code: fallbackErr?.code } } : undefined } });
     }
   }
   const shaped = (list as any[]).map((tc: any) => {
