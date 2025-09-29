@@ -58,7 +58,7 @@ router.get('/', requireAuth, asyncHandler(async (req: Request, res: Response, _n
   const where: any = {};
   if (projectId) where.projectId = projectId;
   if (fileId) where.testCaseFileId = fileId;
-  (where as any).isDeleted = false;
+  // Soft delete removed for TestCase; no isDeleted filter
   const take = 50; const skip = 0;
   let list: any[] = [];
   let total = 0;
@@ -72,9 +72,7 @@ router.get('/', requireAuth, asyncHandler(async (req: Request, res: Response, _n
   } catch (err: any) {
     console.error('[test-cases:list] query failed', err);
     const msg = String(err?.message || '').toLowerCase();
-    if (msg.includes('unknown column') && msg.includes('is_deleted')) {
-      return res.status(500).json({ success: false, error: { code: 'MIGRATION_REQUIRED', message: 'Database schema is missing is_deleted column. Run latest Prisma migrations.' } });
-    }
+    // Migration detection for is_deleted no longer needed after removal
     // Fallback simpler query without include to isolate issue (maybe relation or column)
     try {
       if (debug) console.log('[test-cases:list] attempting fallback simple query');
@@ -120,16 +118,12 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-// Soft delete a test case
+// Delete a test case (hard delete since soft delete removed)
 router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   try {
-    const existing = await prisma.testCase.findUnique({ where: { id } });
-    if (!existing || (existing as any).isDeleted) {
-      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Test case not found' } });
-    }
-  await prisma.testCase.update({ where: { id }, data: { isDeleted: true } as any });
-    res.json({ success: true, data: { deleted: true } });
+    await prisma.testCase.delete({ where: { id } });
+    res.json({ success: true, data: { deleted: true, mode: 'hard' } });
   } catch {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: 'Failed to delete test case' } });
   }
@@ -186,10 +180,10 @@ router.delete('/:id/artifacts/:artifactId', requireAuth, async (req: Request, re
 router.get('/export/xlsx', requireAuth, async (req: Request, res: Response) => {
   const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
   const where: any = projectId ? { projectId } : {};
-  (where as any).isDeleted = false;
+  // Soft delete removed: no isDeleted filter
   const rows = await prisma.testCase.findMany({ where, orderBy: { id: 'asc' } });
   const headers = [
-    'projectId','testCaseIdCode','testCaseFileId','testCaseFileName','category','featureName','description','subFunctionality','preRequisite','inputData','expectedResult','severity','complexity','actualResult','status','defectIdRef','comments','labels','isDeleted'
+    'projectId','testCaseIdCode','testCaseFileId','testCaseFileName','category','featureName','description','subFunctionality','preRequisite','inputData','expectedResult','severity','complexity','actualResult','status','defectIdRef','comments','labels'
   ];
   const content = [headers.join(',')]; // CSV fallback if Excel fails later
   // Build workbook

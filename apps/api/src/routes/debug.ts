@@ -19,11 +19,8 @@ async function columnExists(table: string, column: string) {
 }
 
 router.get('/schema', async (_req: Request, res: Response) => {
-  const [tcHas, tcfHas] = await Promise.all([
-    columnExists('test_cases', 'is_deleted'),
-    columnExists('test_case_files', 'is_deleted')
-  ]);
-  res.json({ success: true, data: { test_cases: { is_deleted: tcHas }, test_case_files: { is_deleted: tcfHas } } });
+  const tcfHas = await columnExists('test_case_files', 'is_deleted');
+  res.json({ success: true, data: { test_case_files: { is_deleted: tcfHas } } });
 });
 
 export default router;

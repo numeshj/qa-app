@@ -123,7 +123,6 @@ model TestCase {
   updatedById    Int?
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
-  isDeleted      Boolean   @default(false) @map("is_deleted")
   artifacts      TestCaseArtifact[]
   @@unique([projectId, testCaseIdCode])
   @@map("test_cases")
