@@ -69,6 +69,10 @@ router.get('/', requireAuth, asyncHandler(async (req: Request, res: Response, _n
     ]);
   } catch (err: any) {
     console.error('[test-cases:list] query failed', err);
+    const msg = String(err?.message || '').toLowerCase();
+    if (msg.includes('unknown column') && msg.includes('is_deleted')) {
+      return res.status(500).json({ success: false, error: { code: 'MIGRATION_REQUIRED', message: 'Database schema is missing is_deleted column. Run latest Prisma migrations.' } });
+    }
     return res.status(500).json({ success: false, error: { code: 'DB_ERROR', message: 'Failed to load test cases' } });
   }
   const shaped = (list as any[]).map((tc: any) => {
