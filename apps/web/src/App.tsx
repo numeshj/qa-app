@@ -1,3 +1,4 @@
+// NOTE: Deprecated: replaced by data router (router.tsx + RouterProvider). Kept temporarily for reference.
 import { Route, Routes, Navigate } from "react-router-dom";
 import { Suspense } from "react";
 import { AppShell } from "./components/AppShell";
