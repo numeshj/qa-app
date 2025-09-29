@@ -5,13 +5,19 @@ import { z } from 'zod';
 
 const router = Router();
 
+// Allow null or empty string for optional text fields by coercing to undefined
+const nullableString = z.preprocess((val) => {
+  if (val === null || val === '' || typeof val === 'undefined') return undefined;
+  return val;
+}, z.string().optional());
+
 const baseSchema = z.object({
   projectId: z.number(),
   name: z.string().min(1),
-  version: z.string().optional(),
-  environment: z.string().optional(),
-  releaseBuild: z.string().optional(),
-  refer: z.string().optional()
+  version: nullableString,
+  environment: nullableString,
+  releaseBuild: nullableString,
+  refer: nullableString
 });
 
 // List files (exclude soft deleted) with optional project filter
