@@ -150,6 +150,8 @@ model Defect {
   id            Int      @id @default(autoincrement())
   project       Project  @relation(fields: [projectId], references: [id])
   projectId     Int
+  defectFile    DefectFile? @relation(fields: [defectFileId], references: [id])
+  defectFileId  Int?
   defectIdCode  String   @map("defect_id_code")
   module        String?
   title         String
@@ -176,8 +178,28 @@ model Defect {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
   artifacts     DefectArtifact[]
+  @@index([defectFileId])
   @@unique([projectId, defectIdCode])
   @@map("defects")
+}
+
+model DefectFile {
+  id           Int       @id @default(autoincrement())
+  project      Project   @relation(fields: [projectId], references: [id])
+  projectId    Int
+  name         String
+  version      String?   @default("1.0")
+  environment  String?
+  releaseBuild String?   @map("release_build")
+  refer        String?
+  author       User?     @relation(fields: [authorId], references: [id])
+  authorId     Int?
+  isDeleted    Boolean   @default(false) @map("is_deleted")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  defects      Defect[]
+  @@unique([projectId, name])
+  @@map("defect_files")
 }
 
 model DefectArtifact {

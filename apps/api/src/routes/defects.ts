@@ -10,6 +10,7 @@ const router = Router();
 const baseSchema = z.object({
   projectId: z.number(),
   defectIdCode: z.string().min(1),
+  defectFileId: z.number().optional(),
   module: z.string().optional(),
   title: z.string().min(1),
   description: z.string().optional(),
@@ -34,13 +35,17 @@ const baseSchema = z.object({
 
 router.get('/', requireAuth, async (req: Request, res: Response) => {
   const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
-  const where = projectId ? { projectId } : {};
+  const defectFileId = req.query.defectFileId ? Number(req.query.defectFileId) : undefined;
+  const where: any = {};
+  if (projectId) where.projectId = projectId;
+  if (defectFileId) where.defectFileId = defectFileId;
   const take = 50; const skip = 0;
   const [list, total] = await Promise.all([
-    prisma.defect.findMany({ where, take, skip, orderBy: { createdAt: 'desc' } }),
+    (prisma as any).defect.findMany({ where, take, skip, orderBy: { createdAt: 'desc' }, include: { defectFile: { select: { id: true, name: true } } } }),
     prisma.defect.count({ where })
   ]);
-  res.json({ success: true, data: list, pagination: { total, take, skip } });
+  const shaped = list.map((d: any) => ({ ...d, defectFileName: d.defectFile?.name || null }));
+  res.json({ success: true, data: shaped, pagination: { total, take, skip } });
 });
 
 router.post('/', requireAuth, async (req: Request, res: Response) => {
@@ -126,21 +131,32 @@ router.delete('/:id/artifacts/:artifactId', requireAuth, async (req: Request, re
 // Import / Export endpoints
 router.get('/export/xlsx', requireAuth, async (req: Request, res: Response) => {
   const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
-  const where = projectId ? { projectId } : {};
-  const rows = await prisma.defect.findMany({ where, orderBy: { id: 'asc' } });
+  const defectFileId = req.query.defectFileId ? Number(req.query.defectFileId) : undefined;
+  const where: any = {};
+  if (projectId) where.projectId = projectId;
+  if (defectFileId) where.defectFileId = defectFileId;
+  const rows = await (prisma as any).defect.findMany({ where, orderBy: { id: 'asc' }, include: { defectFile: { select: { id: true, name: true } } } });
   const headers = [
-    'projectId','defectIdCode','module','title','description','testData','actualResults','expectedResults','priority','severity','status','release','assignedToId','deliveryDate','reportedById','labels','environment','rcaStatus','reportedDate','closedDate','comments','triageComments'
+    'projectId','defectIdCode','defectFileId','defectFileName','module','title','description','testData','actualResults','expectedResults','priority','severity','status','release','assignedToId','deliveryDate','reportedById','labels','environment','rcaStatus','reportedDate','closedDate','comments','triageComments'
   ];
   try {
     const { buildWorkbook, workbookToBuffer } = await import('../utils/xlsx');
-    const wb = buildWorkbook<any>({ sheetName: 'Defects', headers: headers.map(h => ({ key: h as any, label: h })) }, rows as any);
+    const shaped = rows.map((r: any) => ({
+      ...r,
+      defectFileName: r.defectFile?.name || null
+    }));
+    const wb = buildWorkbook<any>({ sheetName: 'Defects', headers: headers.map(h => ({ key: h as any, label: h })) }, shaped as any);
     const buf = workbookToBuffer(wb);
     res.setHeader('Content-Disposition', 'attachment; filename="defects.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     return res.send(buf);
   } catch {
     const lines = [headers.join(',')];
-    for (const r of rows) lines.push(headers.map(h => (r as any)[h] ?? '').join(','));
+    for (const r of rows) {
+      const defectFileName = (r as any).defectFile?.name || '';
+      const rowObj: any = { ...r, defectFileName };
+      lines.push(headers.map(h => rowObj[h] ?? '').join(','));
+    }
     res.setHeader('Content-Disposition', 'attachment; filename="defects.csv"');
     res.setHeader('Content-Type', 'text/csv');
     return res.send(lines.join('\n'));
@@ -149,7 +165,7 @@ router.get('/export/xlsx', requireAuth, async (req: Request, res: Response) => {
 
 router.get('/template/xlsx', requireAuth, async (_req: Request, res: Response) => {
   const headers = [
-    'projectId','defectIdCode','module','title','description','testData','actualResults','expectedResults','priority','severity','status','release','assignedToId','deliveryDate','reportedById','labels','environment','rcaStatus','reportedDate','closedDate','comments','triageComments'
+    'projectId','defectIdCode','defectFileId','defectFileName','module','title','description','testData','actualResults','expectedResults','priority','severity','status','release','assignedToId','deliveryDate','reportedById','labels','environment','rcaStatus','reportedDate','closedDate','comments','triageComments'
   ];
   try {
     const buf = buildTemplate(headers, 'Defects');
@@ -169,11 +185,40 @@ router.post('/import/xlsx', requireAuth, upload.single('file'), async (req: Requ
   if (!buffer) return res.status(400).json({ success: false, error: { code: 'READ_ERROR', message: 'Could not read file' } });
   const { rows, errors } = parseSheet<any>(buffer);
   const created: any[] = []; const failed: any[] = [];
+  // Preload defect files for name->id resolution
+  let filesById: Map<number, any> | null = null;
+  let fileByProjectAndName: Map<string, any> | null = null;
+  const anyPrisma: any = prisma as any;
+  if (anyPrisma.defectFile) {
+    try {
+      const files = await anyPrisma.defectFile.findMany({ select: { id: true, name: true, projectId: true, isDeleted: true } });
+      filesById = new Map(files.map((f: any) => [f.id, f]));
+      fileByProjectAndName = new Map(files.map((f: any) => [`${f.projectId}::${(f.name||'').toLowerCase()}`, f]));
+    } catch { /* ignore */ }
+  }
   for (let i = 0; i < rows.length; i++) {
     const raw = rows[i];
+    let defectFileId: number | undefined = undefined;
+    if (raw.defectFileId && /^\d+$/.test(String(raw.defectFileId).trim())) {
+      const idNum = Number(String(raw.defectFileId).trim());
+      if (!filesById || filesById.has(idNum)) defectFileId = idNum; else {
+        failed.push({ row: i + 2, errors: [`Unknown defectFileId '${raw.defectFileId}'`] });
+        continue;
+      }
+    } else if (raw.defectFileName) {
+      const key = `${raw.projectId}::${String(raw.defectFileName).trim().toLowerCase()}`;
+      if (!fileByProjectAndName || fileByProjectAndName.has(key)) {
+        defectFileId = fileByProjectAndName ? fileByProjectAndName.get(key)?.id : undefined;
+        if (fileByProjectAndName && !defectFileId) {
+          failed.push({ row: i + 2, errors: [`Unknown defectFileName '${raw.defectFileName}' for project ${raw.projectId}`] });
+          continue;
+        }
+      }
+    }
     const parsed = baseSchema.safeParse({
       projectId: Number(raw.projectId),
       defectIdCode: String(raw.defectIdCode || '').trim(),
+      defectFileId,
       module: raw.module || undefined,
       title: String(raw.title || '').trim(),
       description: raw.description || undefined,
