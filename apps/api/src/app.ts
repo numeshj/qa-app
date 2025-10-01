@@ -12,6 +12,7 @@ import lookupRoutes from "./routes/lookups";
 import dashboardRoutes from "./routes/dashboard";
 import auditRoutes from "./routes/audit";
 import testCaseFileRoutes from "./routes/testCaseFiles";
+import defectFileRoutes from "./routes/defectFiles";
 import debugRoutes from "./routes/debug";
 import path from 'path';
 import fs from 'fs';
@@ -40,6 +41,7 @@ app.use("/lookups", lookupRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/audit", auditRoutes);
 app.use("/test-case-files", testCaseFileRoutes);
+app.use("/defect-files", defectFileRoutes);
 app.use("/debug", debugRoutes);
 
 // Ensure upload dir exists then serve statics (basic public serving for now)
