@@ -33,7 +33,7 @@ const ProjectsPage = () => {
 
   return <Card title="Projects" extra={<Button type="primary" onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }}>New</Button>}>
     <Table size="small" rowKey="id" loading={isLoading} dataSource={data?.data || []} columns={columns as any} pagination={false} />
-    <Modal open={open} onCancel={() => setOpen(false)} onOk={() => form.submit()} title={editing ? 'Edit Project' : 'New Project'} destroyOnClose>
+  <Modal open={open} onCancel={() => setOpen(false)} onOk={() => form.submit()} title={editing ? 'Edit Project' : 'New Project'} destroyOnHidden>
       <Form form={form} layout="vertical" onFinish={(v) => saveMutation.mutate(v)} initialValues={{ code: '', name: '' }}>
         <Form.Item name="code" label="Code" rules={[{ required: true }]}><Input /></Form.Item>
         <Form.Item name="name" label="Name" rules={[{ required: true }]}><Input /></Form.Item>

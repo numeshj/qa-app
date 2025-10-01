@@ -59,7 +59,7 @@ const DefectsPage = () => {
       <Button disabled>Export</Button>
     </div>
     <Table size='small' rowKey='id' loading={isLoading} dataSource={data?.data || []} columns={columns as any} pagination={false} />
-    <Modal open={open} onCancel={() => setOpen(false)} onOk={() => form.submit()} title={editing ? 'Edit Defect' : 'New Defect'} destroyOnClose>
+  <Modal open={open} onCancel={() => setOpen(false)} onOk={() => form.submit()} title={editing ? 'Edit Defect' : 'New Defect'} destroyOnHidden>
       <Form form={form} layout='vertical' onFinish={(v) => saveMutation.mutate(v)} initialValues={{ defectIdCode: '' }}>
         <Form.Item name='projectId' label='Project' rules={[{ required: true }]}>
           <Select options={(projects.data?.data || []).map(p => ({ value: p.id, label: p.code }))} loading={projects.isLoading} showSearch optionFilterProp='label' />
@@ -77,7 +77,7 @@ const DefectsPage = () => {
         </Form.Item>
       </Form>
     </Modal>
-    <Modal open={artifactModal.open} onCancel={() => { setArtifactModal({ open: false, defect: null }); setFileList([]); }} onOk={() => { /* trigger upload done automatically */ setArtifactModal({ open: false, defect: null }); setFileList([]); }} title={`Artifacts - ${artifactModal.defect?.defectIdCode}`} destroyOnClose>
+  <Modal open={artifactModal.open} onCancel={() => { setArtifactModal({ open: false, defect: null }); setFileList([]); }} onOk={() => { /* trigger upload done automatically */ setArtifactModal({ open: false, defect: null }); setFileList([]); }} title={`Artifacts - ${artifactModal.defect?.defectIdCode}`} destroyOnHidden>
       {artifactModal.defect && <Upload
         fileList={fileList}
         multiple
