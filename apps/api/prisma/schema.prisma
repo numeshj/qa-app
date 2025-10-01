@@ -25,6 +25,7 @@ model User {
   TestCaseCreated TestCase[] @relation("TestCaseCreatedBy")
   TestCaseUpdated TestCase[] @relation("TestCaseUpdatedBy")
   TestCaseFilesAuthored TestCaseFile[] @relation("TestCaseFileAuthor")
+  DefectFilesAuthored DefectFile[] @relation("DefectFileAuthor")
   DefectAssigned Defect[]   @relation("DefectAssignedTo")
   DefectReported Defect[]   @relation("DefectReportedBy")
   auditLogs     AuditLog[]
@@ -75,6 +76,7 @@ model Project {
   testCaseFiles TestCaseFile[]
   testCases   TestCase[]
   defects     Defect[]
+  defectFiles DefectFile[]
 }
 
 model TestCaseFile {
@@ -192,7 +194,7 @@ model DefectFile {
   environment  String?
   releaseBuild String?   @map("release_build")
   refer        String?
-  author       User?     @relation(fields: [authorId], references: [id])
+  author       User?     @relation("DefectFileAuthor", fields: [authorId], references: [id])
   authorId     Int?
   isDeleted    Boolean   @default(false) @map("is_deleted")
   createdAt    DateTime  @default(now()) @map("created_at")

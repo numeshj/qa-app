@@ -7,12 +7,10 @@ import userRoutes from "./routes/users";
 import projectRoutes from "./routes/projects";
 import { errorHandler } from "./middlewares/error";
 import testCaseRoutes from "./routes/testCases";
-import defectRoutes from "./routes/defects";
 import lookupRoutes from "./routes/lookups";
 import dashboardRoutes from "./routes/dashboard";
 import auditRoutes from "./routes/audit";
 import testCaseFileRoutes from "./routes/testCaseFiles";
-import defectFileRoutes from "./routes/defectFiles";
 import debugRoutes from "./routes/debug";
 import path from 'path';
 import fs from 'fs';
@@ -36,12 +34,10 @@ app.use("/auth", authRoutes);
 app.use("/users", userRoutes);
 app.use("/projects", projectRoutes);
 app.use("/test-cases", testCaseRoutes);
-app.use("/defects", defectRoutes);
 app.use("/lookups", lookupRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/audit", auditRoutes);
 app.use("/test-case-files", testCaseFileRoutes);
-app.use("/defect-files", defectFileRoutes);
 app.use("/debug", debugRoutes);
 
 // Ensure upload dir exists then serve statics (basic public serving for now)
