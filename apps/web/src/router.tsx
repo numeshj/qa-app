@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import ProjectsPage from './pages/ProjectsPage';
 import TestCasesPage from './pages/TestCasesPage';
+import DefectsPage from './pages/DefectsPage';
 import AuditPage from './pages/AuditPage';
 import { Suspense } from 'react';
 
@@ -20,9 +21,10 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Suspense fallback={<div>Loading...</div>}><DashboardPage /></Suspense> },
       { path: 'dashboard', element: <Navigate to='/app' replace /> },
-      { path: 'projects', element: <ProjectsPage /> },
-      { path: 'test-cases', element: <TestCasesPage /> },
-      { path: 'audit', element: <AuditPage /> }
+    { path: 'projects', element: <ProjectsPage /> },
+    { path: 'test-cases', element: <TestCasesPage /> },
+    { path: 'defects', element: <DefectsPage /> },
+    { path: 'audit', element: <AuditPage /> }
     ]
   },
   { path: '*', element: <Navigate to='/login' replace /> }

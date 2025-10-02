@@ -1,200 +1,500 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import { Button, Card, Form, Input, Modal, Select, Space, Table, Upload, message, Tag, Alert } from 'antd';
-import { UploadOutlined } from '@ant-design/icons';
-import { useState } from 'react';
+import {
+  Alert,
+  Button,
+  Card,
+  DatePicker,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  message
+} from 'antd';
+import type { ColumnsType } from 'antd/es/table';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
 
-interface Defect { id: number; defectIdCode: string; title: string; severity?: string | null; priority?: string | null; status?: string | null; projectId: number; defectFileId?: number | null; defectFileName?: string | null; }
-interface Project { id: number; code: string; name: string; }
-interface DefectFile { id: number; name: string; projectId: number; version?: string | null; environment?: string | null; releaseBuild?: string | null; refer?: string | null; _count?: { defects: number }; isDeleted?: boolean; }
+dayjs.extend(relativeTime);
 
-const useProjects = () => useQuery<{ success: boolean; data: Project[] }>({ queryKey: ['projects'], queryFn: async () => (await api.get('/projects')).data });
-const useLookup = (category: string) => useQuery<{ success: boolean; data: any[] }>({ queryKey: ['lookup', category], queryFn: async () => (await api.get(`/lookups/${category}`)).data });
+type ApiResponse<T> = { success: boolean; data: T };
+
+interface Project {
+  id: number;
+  code: string;
+  name: string;
+}
+
+interface DefectFile {
+  id: number;
+  name: string;
+  projectId: number;
+  version?: string | null;
+  environment?: string | null;
+  releaseBuild?: string | null;
+  refer?: string | null;
+  isDeleted?: boolean;
+  _count?: { defects: number };
+}
+
+interface Defect {
+  id: number;
+  defectIdCode: string;
+  title: string;
+  module?: string | null;
+  status?: string | null;
+  severity?: string | null;
+  priority?: string | null;
+  projectId: number;
+  defectFileId?: number | null;
+  defectFileName?: string | null;
+  projectName?: string | null;
+  assignedToName?: string | null;
+  reportedByName?: string | null;
+  artifactCount?: number;
+  description?: string | null;
+  deliveryDate?: string | null;
+  reportedDate?: string | null;
+  closedDate?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+
+const statusOptions = ['open', 'in_progress', 'resolved', 'closed', 'on_hold'];
+const severityOptions = ['Critical', 'High', 'Medium', 'Low'];
+const priorityOptions = ['P0', 'P1', 'P2', 'P3'];
 
 const DefectsPage = () => {
   const qc = useQueryClient();
-  // Active defect file gating
-  const [activeFile, setActiveFile] = useState<DefectFile | null>(null);
-  const defectsQuery = useQuery<{ success: boolean; data: Defect[] }>({
-    queryKey: ['defects', activeFile?.id],
-    enabled: !!activeFile,
-    queryFn: async () => (await api.get(`/defects?defectFileId=${activeFile!.id}`)).data
+  const [projectFilter, setProjectFilter] = useState<number | undefined>();
+  const [selectedFileId, setSelectedFileId] = useState<number | undefined>();
+
+  const { data: projectQuery, isLoading: projectsLoading } = useQuery<ApiResponse<Project[]>>({
+    queryKey: ['projects'],
+    queryFn: async () => (await api.get('/projects')).data
   });
-  const defectFiles = useQuery<{ success: boolean; data: DefectFile[] }>({ queryKey: ['defect-files'], queryFn: async () => (await api.get('/defect-files')).data });
+  const projects = projectQuery?.data ?? [];
 
-  const projects = useProjects();
-  const severity = useLookup('defect_severity');
-  const priority = useLookup('priority');
-  const status = useLookup('defect_status');
+  const {
+    data: fileQuery,
+    isLoading: filesLoading
+  } = useQuery<ApiResponse<DefectFile[]>>({
+    queryKey: ['defect-files'],
+    queryFn: async () => (await api.get('/defect-files')).data
+  });
+  const files = useMemo(() => {
+    const raw = fileQuery?.data ?? [];
+    return raw.filter((f) => !f.isDeleted);
+  }, [fileQuery]);
 
-  // Defect File modal state
-  const [fileModalOpen, setFileModalOpen] = useState(false);
-  const [editingFile, setEditingFile] = useState<DefectFile | null>(null);
+  const filteredFiles = useMemo(() => {
+    if (!projectFilter) return files;
+    return files.filter((f) => f.projectId === projectFilter);
+  }, [files, projectFilter]);
+
+  useEffect(() => {
+    if (!selectedFileId && filteredFiles.length) {
+      setSelectedFileId(filteredFiles[0].id);
+    }
+    if (selectedFileId && !filteredFiles.some((f) => f.id === selectedFileId)) {
+      setSelectedFileId(filteredFiles[0]?.id);
+    }
+  }, [filteredFiles, selectedFileId]);
+
+  const activeFile = files.find((f) => f.id === selectedFileId) ?? null;
+
+  const { data: defectsQuery, isLoading: defectsLoading } = useQuery<ApiResponse<Defect[]>>({
+    queryKey: ['defects', selectedFileId, projectFilter],
+    enabled: !!selectedFileId || !!projectFilter,
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedFileId) params.append('fileId', String(selectedFileId));
+      if (projectFilter) params.append('projectId', String(projectFilter));
+      const res = await api.get(`/defects?${params.toString()}`);
+      return res.data;
+    }
+  });
+  const defects = defectsQuery?.data ?? [];
+
+  const [defectModal, setDefectModal] = useState<{ open: boolean; editing: Defect | null }>({ open: false, editing: null });
+  const [defectForm] = Form.useForm();
+  const projectIdValue = Form.useWatch('projectId', defectForm);
+
+  const [fileModal, setFileModal] = useState<{ open: boolean; editing: DefectFile | null }>({ open: false, editing: null });
   const [fileForm] = Form.useForm();
 
-  // Defect modal state
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<Defect | null>(null);
-  const [form] = Form.useForm();
-  const [artifactModal, setArtifactModal] = useState<{open: boolean; defect: Defect | null}>({ open: false, defect: null });
-  const [uploadList, setUploadList] = useState<any[]>([]);
+  useEffect(() => {
+    if (defectModal.open) {
+      if (defectModal.editing) {
+        const record = defectModal.editing as any;
+        defectForm.setFieldsValue({
+          projectId: record.projectId,
+          defectFileId: record.defectFileId ?? activeFile?.id,
+          defectIdCode: record.defectIdCode,
+          title: record.title,
+          module: record.module ?? undefined,
+          status: record.status ?? undefined,
+          severity: record.severity ?? undefined,
+          priority: record.priority ?? undefined,
+          description: record.description ?? undefined,
+          deliveryDate: record.deliveryDate ? dayjs(record.deliveryDate) : undefined,
+          reportedDate: record.reportedDate ? dayjs(record.reportedDate) : undefined,
+          closedDate: record.closedDate ? dayjs(record.closedDate) : undefined
+        });
+      } else {
+        defectForm.resetFields();
+        defectForm.setFieldsValue({
+          projectId: activeFile?.projectId,
+          defectFileId: activeFile?.id
+        });
+      }
+    }
+  }, [defectModal, defectForm, activeFile]);
 
-  const saveFileMutation = useMutation({
-    mutationFn: async (values: any) => {
-      const payload = { ...values, projectId: Number(values.projectId) };
-      if (editingFile) return (await api.put(`/defect-files/${editingFile.id}`, payload)).data;
+  useEffect(() => {
+    if (fileModal.open) {
+      if (fileModal.editing) {
+        fileForm.setFieldsValue({
+          projectId: fileModal.editing.projectId,
+          name: fileModal.editing.name,
+          version: fileModal.editing.version ?? undefined,
+          environment: fileModal.editing.environment ?? undefined,
+          releaseBuild: fileModal.editing.releaseBuild ?? undefined,
+          refer: fileModal.editing.refer ?? undefined
+        });
+      } else {
+        fileForm.resetFields();
+        if (projectFilter) fileForm.setFieldsValue({ projectId: projectFilter });
+      }
+    }
+  }, [fileModal, fileForm, projectFilter]);
+
+  const saveFile = useMutation({
+    mutationFn: async (payload: any) => {
+      if (fileModal.editing) {
+        return (await api.put(`/defect-files/${fileModal.editing.id}`, payload)).data;
+      }
       return (await api.post('/defect-files', payload)).data;
     },
-    onSuccess: () => { message.success('File saved'); setFileModalOpen(false); setEditingFile(null); fileForm.resetFields(); qc.invalidateQueries({ queryKey: ['defect-files'] }); },
-    onError: (e:any) => message.error(e.response?.data?.error?.message || 'File save failed')
+    onSuccess: (result) => {
+      const saved = (result as ApiResponse<DefectFile>).data;
+      message.success('Defect file saved');
+      qc.invalidateQueries({ queryKey: ['defect-files'] });
+      if (saved?.id) {
+        setProjectFilter(saved.projectId);
+        setSelectedFileId(saved.id);
+      }
+      setFileModal({ open: false, editing: null });
+      fileForm.resetFields();
+    },
+    onError: (err: any) => message.error(err?.response?.data?.error?.message || 'Failed to save defect file')
   });
 
-  const deleteFileMutation = useMutation({
+  const deleteFile = useMutation({
     mutationFn: async (id: number) => (await api.delete(`/defect-files/${id}`)).data,
-    onSuccess: (_d, id) => { message.success('File deleted'); if (activeFile?.id === id) setActiveFile(null); qc.invalidateQueries({ queryKey: ['defect-files'] }); },
-    onError: (e:any) => message.error(e.response?.data?.error?.message || 'Delete failed')
+    onSuccess: (_res, id) => {
+      message.success('Defect file deleted');
+      if (selectedFileId === id) setSelectedFileId(undefined);
+      qc.invalidateQueries({ queryKey: ['defect-files'] });
+    },
+    onError: (err: any) => message.error(err?.response?.data?.error?.message || 'Failed to delete defect file')
   });
 
-  const saveDefectMutation = useMutation({
-    mutationFn: async (values: any) => {
-      if (!activeFile) throw new Error('Select a Defect File first');
-      const payload = { ...values, projectId: Number(values.projectId), defectFileId: activeFile.id };
-      if (editing) return (await api.put(`/defects/${editing.id}`, payload)).data;
+  const saveDefect = useMutation({
+    mutationFn: async (payload: any) => {
+      if (defectModal.editing) {
+        return (await api.put(`/defects/${defectModal.editing.id}`, payload)).data;
+      }
       return (await api.post('/defects', payload)).data;
     },
-    onSuccess: () => { message.success('Saved'); setOpen(false); setEditing(null); form.resetFields(); qc.invalidateQueries({ queryKey: ['defects', activeFile?.id] }); },
-    onError: (e:any) => message.error(e.response?.data?.error?.message || 'Failed')
+    onSuccess: () => {
+      message.success('Defect saved');
+      qc.invalidateQueries({ queryKey: ['defects'] });
+      setDefectModal({ open: false, editing: null });
+      defectForm.resetFields();
+    },
+    onError: (err: any) => message.error(err?.response?.data?.error?.message || 'Failed to save defect')
   });
 
-  const statusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: number; status: string }) => (await api.put(`/defects/${id}`, { status })).data,
-    onSuccess: () => { message.success('Status updated'); qc.invalidateQueries({ queryKey: ['defects', activeFile?.id] }); },
-    onError: (e: any) => message.error(e.response?.data?.error?.message || 'Failed')
+  const deleteDefect = useMutation({
+    mutationFn: async (id: number) => (await api.delete(`/defects/${id}`)).data,
+    onSuccess: () => {
+      message.success('Defect deleted');
+      qc.invalidateQueries({ queryKey: ['defects'] });
+    },
+    onError: (err: any) => message.error(err?.response?.data?.error?.message || 'Failed to delete defect')
   });
 
-  const defectColumns = [
-    { title: 'Code', dataIndex: 'defectIdCode', width: 130 },
-    { title: 'Title', dataIndex: 'title', width: 220 },
-    { title: 'Severity', dataIndex: 'severity' },
-    { title: 'Priority', dataIndex: 'priority' },
-    { title: 'Status', dataIndex: 'status', render: (v: string, r: Defect) => <Select size='small' value={v} style={{ width: 120 }} onChange={(val) => statusMutation.mutate({ id: r.id, status: val })} options={(status.data?.data || []).map(s => ({ value: s.code, label: s.code }))} /> },
-    { title: 'Project', dataIndex: 'projectId', render: (v: number) => projects.data?.data.find(p => p.id === v)?.code },
-    { title: 'Actions', render: (_: any, r: Defect) => <Space>
-        <Button size='small' onClick={() => { setEditing(r); form.setFieldsValue(r); setOpen(true); }}>Edit</Button>
-        <Button size='small' onClick={() => setArtifactModal({ open: true, defect: r })}>Artifacts</Button>
-      </Space>, width: 150 }
-  ];
-
-  const fileColumns = [
-    { title: 'ID', dataIndex: 'id', width: 70 },
-    { title: 'Name', dataIndex: 'name' },
-    { title: 'Project', dataIndex: 'projectId', render: (v:number) => projects.data?.data.find(p => p.id === v)?.code },
-    { title: 'Count', dataIndex: ['_count','defects'], width: 70 },
-    { title: 'Actions', width: 120, render: (_:any, r:DefectFile) => <Space>
-        <Button size='small' onClick={() => { setEditingFile(r); fileForm.setFieldsValue(r); setFileModalOpen(true); }}>Edit</Button>
-        <Button size='small' danger onClick={() => deleteFileMutation.mutate(r.id)}>Del</Button>
-      </Space> }
-  ];
-
-  return <Card title={`Defect Files${activeFile ? ' / ' + activeFile.name : ''}`} extra={<Space>
-    <Button onClick={() => { setEditingFile(null); fileForm.resetFields(); setFileModalOpen(true); }}>New File</Button>
-    <Button type='primary' disabled={!activeFile} onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }}>New Defect</Button>
-  </Space>}>
-    <div style={{ display: 'flex', gap: 16, alignItems: 'stretch' }}>
-      <div style={{ flex: '0 0 360px', display: 'flex', flexDirection: 'column' }}>
-        <Table size='small' rowKey='id' loading={defectFiles.isLoading} dataSource={defectFiles.data?.data || []} columns={fileColumns as any} pagination={false}
-          onRow={(r) => ({ onClick: () => setActiveFile(r) })}
-          rowClassName={(r) => r.id === activeFile?.id ? 'ant-table-row-selected' : ''}
-          style={{ marginBottom: 12 }}
-        />
-        {!activeFile && <Alert type='info' message='Select a defect file to view its defects.' showIcon />}
-      </div>
-      <div style={{ flex: 1 }}>
-        <Space style={{ marginBottom: 12 }}>
-          <Button disabled={!activeFile} onClick={() => activeFile && window.open(`/api/defects/export/xlsx?defectFileId=${activeFile.id}`,'_blank')}>Export</Button>
-          <Upload beforeUpload={() => false} showUploadList={false} disabled={!activeFile}
-            customRequest={async ({ file, onSuccess, onError }: any) => {
-              if (!activeFile) return onError(new Error('No file selected'));
-              try {
-                const formData = new FormData();
-                formData.append('file', file as File);
-                await api.post('/defects/import/xlsx', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-                message.success('Import queued');
-                qc.invalidateQueries({ queryKey: ['defects', activeFile.id] });
-                onSuccess('ok');
-              } catch (e:any) {
-                message.error(e.response?.data?.error?.message || 'Import failed');
-                onError(e);
-              }
-            }}>
-            <Button disabled={!activeFile}>Import</Button>
-          </Upload>
+  const columns: ColumnsType<Defect> = [
+    { title: 'Defect ID', dataIndex: 'defectIdCode', key: 'defectIdCode', width: 140 },
+    { title: 'Title', dataIndex: 'title', key: 'title', ellipsis: true },
+    {
+      title: 'Severity',
+      dataIndex: 'severity',
+      key: 'severity',
+      width: 120,
+      render: (value) => (value ? <Tag color={value === 'Critical' || value === 'High' ? 'red' : 'blue'}>{value}</Tag> : '-')
+    },
+    {
+      title: 'Priority',
+      dataIndex: 'priority',
+      key: 'priority',
+      width: 110,
+      render: (value) => (value ? <Tag>{value}</Tag> : '-')
+    },
+    {
+      title: 'Status',
+      dataIndex: 'status',
+      key: 'status',
+      width: 130,
+      render: (value) => (value ? <Tag color={value === 'closed' ? 'green' : value === 'resolved' ? 'blue' : 'gold'}>{value}</Tag> : '-')
+    },
+    {
+      title: 'Updated',
+      dataIndex: 'updatedAt',
+      key: 'updatedAt',
+      width: 150,
+      render: (value) => (value ? dayjs(value).fromNow() : '-')
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      fixed: 'right',
+      width: 160,
+      render: (_, record) => (
+        <Space>
+          <Button type="link" onClick={() => setDefectModal({ open: true, editing: record })}>
+            Edit
+          </Button>
+          <Popconfirm
+            title="Delete defect"
+            description="Are you sure you want to delete this defect?"
+            onConfirm={() => deleteDefect.mutate(record.id)}
+          >
+            <Button type="link" danger loading={deleteDefect.isPending}>
+              Delete
+            </Button>
+          </Popconfirm>
         </Space>
-        <Table size='small' rowKey='id' loading={defectsQuery.isLoading} dataSource={defectsQuery.data?.data || []} columns={defectColumns as any} pagination={false}
-          locale={!activeFile ? { emptyText: 'Select a Defect File' } : undefined}
+      )
+    }
+  ];
+
+  const handleDefectSubmit = () => {
+    defectForm
+      .validateFields()
+      .then((values) => {
+        const payload = {
+          ...values,
+          projectId: Number(values.projectId ?? activeFile?.projectId),
+          defectFileId: Number(values.defectFileId ?? activeFile?.id),
+          deliveryDate: values.deliveryDate ? values.deliveryDate.toISOString() : undefined,
+          reportedDate: values.reportedDate ? values.reportedDate.toISOString() : undefined,
+          closedDate: values.closedDate ? values.closedDate.toISOString() : undefined
+        };
+        if (!payload.projectId) {
+          message.error('Project is required');
+          return;
+        }
+        if (!payload.defectFileId) {
+          message.error('Defect file is required');
+          return;
+        }
+        saveDefect.mutate(payload);
+      })
+      .catch(() => undefined);
+  };
+
+  const handleFileSubmit = () => {
+    fileForm
+      .validateFields()
+      .then((values) => {
+        const payload = {
+          ...values,
+          projectId: Number(values.projectId)
+        };
+        saveFile.mutate(payload);
+      })
+      .catch(() => undefined);
+  };
+
+  const busy = defectsLoading || filesLoading;
+
+  return (
+    <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <Card>
+        <Space wrap size="middle">
+          <div>
+            <Typography.Text type="secondary">Project</Typography.Text>
+            <Select
+              style={{ width: 220 }}
+              placeholder="Select project"
+              allowClear
+              value={projectFilter}
+              loading={projectsLoading}
+              onChange={(val) => setProjectFilter(val)}
+              options={projects.map((p) => ({ value: p.id, label: `${p.code} · ${p.name}` }))}
+              optionFilterProp="label"
+              showSearch
+            />
+          </div>
+          <div>
+            <Typography.Text type="secondary">Defect File</Typography.Text>
+            <Select
+              style={{ width: 240 }}
+              placeholder="Select defect file"
+              value={selectedFileId}
+              onChange={(val) => setSelectedFileId(val)}
+              options={filteredFiles.map((f) => ({ value: f.id, label: `${f.name}${f.version ? ` v${f.version}` : ''}` }))}
+              optionFilterProp="label"
+              showSearch
+            />
+          </div>
+          <Space>
+            <Button type="primary" onClick={() => setDefectModal({ open: true, editing: null })} disabled={!activeFile}>
+              New Defect
+            </Button>
+            <Button onClick={() => setFileModal({ open: true, editing: null })}>New Defect File</Button>
+            <Button onClick={() => activeFile && setFileModal({ open: true, editing: activeFile })} disabled={!activeFile}>
+              Edit Selected File
+            </Button>
+            {activeFile && (
+              <Popconfirm
+                title="Delete defect file"
+                description="Deleting this file will hide associated defects. Continue?"
+                onConfirm={() => deleteFile.mutate(activeFile.id)}
+              >
+                <Button danger loading={deleteFile.isPending}>Delete File</Button>
+              </Popconfirm>
+            )}
+          </Space>
+        </Space>
+      </Card>
+
+      {!activeFile && !projectFilter && (
+        <Alert type="info" message="Select a project or defect file to view defects." showIcon />
+      )}
+
+      <Card title={activeFile ? `Defects · ${activeFile.name}` : 'Defects'}>
+        <Table
+          rowKey="id"
+          loading={busy}
+          dataSource={defects}
+          columns={columns}
+          pagination={{ pageSize: 10 }}
+          scroll={{ x: 900 }}
         />
-      </div>
-    </div>
+      </Card>
 
-    {/* Defect File Modal */}
-    <Modal open={fileModalOpen} onCancel={() => { setFileModalOpen(false); setEditingFile(null); fileForm.resetFields(); }} onOk={() => fileForm.submit()} title={editingFile ? 'Edit Defect File' : 'New Defect File'} destroyOnHidden>
-      <Form form={fileForm} layout='vertical' onFinish={(v) => saveFileMutation.mutate(v)}>
-        <Form.Item name='projectId' label='Project' rules={[{ required: true }]}>
-          <Select options={(projects.data?.data || []).map(p => ({ value: p.id, label: p.code }))} loading={projects.isLoading} showSearch optionFilterProp='label' />
-        </Form.Item>
-        <Form.Item name='name' label='Name' rules={[{ required: true }]}><Input /></Form.Item>
-        <Form.Item name='version' label='Version'><Input /></Form.Item>
-        <Form.Item name='environment' label='Environment'><Input /></Form.Item>
-        <Form.Item name='releaseBuild' label='Release Build'><Input /></Form.Item>
-        <Form.Item name='refer' label='Reference'><Input /></Form.Item>
-      </Form>
-    </Modal>
-
-    {/* Defect Modal */}
-    <Modal open={open} onCancel={() => setOpen(false)} onOk={() => form.submit()} title={editing ? 'Edit Defect' : 'New Defect'} destroyOnHidden>
-      <Form form={form} layout='vertical' onFinish={(v) => saveDefectMutation.mutate(v)} initialValues={{ defectIdCode: '' }}>
-        <Form.Item name='projectId' label='Project' rules={[{ required: true }]}>
-          <Select options={(projects.data?.data || []).map(p => ({ value: p.id, label: p.code }))} loading={projects.isLoading} showSearch optionFilterProp='label' />
-        </Form.Item>
-        <Form.Item name='defectIdCode' label='Code' rules={[{ required: true }]}><Input /></Form.Item>
-        <Form.Item name='title' label='Title' rules={[{ required: true }]}><Input /></Form.Item>
-        <Form.Item name='severity' label='Severity'>
-          <Select options={(severity.data?.data || []).map(l => ({ value: l.code, label: l.code }))} loading={severity.isLoading} allowClear />
-        </Form.Item>
-        <Form.Item name='priority' label='Priority'>
-          <Select options={(priority.data?.data || []).map(l => ({ value: l.code, label: l.code }))} loading={priority.isLoading} allowClear />
-        </Form.Item>
-        <Form.Item name='status' label='Status'>
-          <Select options={(status.data?.data || []).map(l => ({ value: l.code, label: l.code }))} loading={status.isLoading} allowClear />
-        </Form.Item>
-      </Form>
-    </Modal>
-
-    {/* Artifact upload modal */}
-    <Modal open={artifactModal.open} onCancel={() => { setArtifactModal({ open: false, defect: null }); setUploadList([]); }} onOk={() => { setArtifactModal({ open: false, defect: null }); setUploadList([]); }} title={`Artifacts - ${artifactModal.defect?.defectIdCode || ''}`} destroyOnHidden>
-      {artifactModal.defect && <Upload
-        fileList={uploadList}
-        multiple
-        beforeUpload={() => false}
-        onChange={({ fileList }) => setUploadList(fileList)}
-        customRequest={async ({ file, onSuccess, onError }: any) => {
-          try {
-            const formData = new FormData();
-            formData.append('file', file as File);
-            await api.post(`/defects/${artifactModal.defect!.id}/artifacts`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-            onSuccess('ok');
-            message.success('Uploaded');
-          } catch (e: any) {
-            onError(e);
-            message.error(e.response?.data?.error?.message || 'Upload failed');
-          }
-        }}
+      <Modal
+        title={defectModal.editing ? 'Edit Defect' : 'New Defect'}
+        open={defectModal.open}
+        onCancel={() => setDefectModal({ open: false, editing: null })}
+        onOk={handleDefectSubmit}
+        confirmLoading={saveDefect.isPending}
+  destroyOnHidden
+        width={640}
       >
-        <Button icon={<UploadOutlined />}>Upload</Button>
-      </Upload>}
-      <p style={{ marginTop: 12, fontSize: 12 }}>Uploads accepted: png, jpg, webp, mp4, webm.</p>
-    </Modal>
-  </Card>;
+        <Form layout="vertical" form={defectForm} preserve={false}>
+          <Form.Item name="projectId" label="Project" rules={[{ required: true, message: 'Project is required' }]}>
+            <Select
+              placeholder="Choose project"
+              options={projects.map((p) => ({ value: p.id, label: `${p.code} · ${p.name}` }))}
+              loading={projectsLoading}
+              showSearch
+              optionFilterProp="label"
+            />
+          </Form.Item>
+          <Form.Item name="defectFileId" label="Defect File" rules={[{ required: true, message: 'Defect file is required' }]}>
+            <Select
+              placeholder="Choose defect file"
+              options={files
+                .filter((f) => !projectIdValue || f.projectId === projectIdValue)
+                .map((f) => ({ value: f.id, label: `${f.name}${f.version ? ` v${f.version}` : ''}` }))}
+              showSearch
+              optionFilterProp="label"
+            />
+          </Form.Item>
+          <Form.Item name="defectIdCode" label="Defect ID" rules={[{ required: true, message: 'Defect ID is required' }]}>
+            <Input autoComplete="off" />
+          </Form.Item>
+          <Form.Item name="title" label="Title" rules={[{ required: true, message: 'Title is required' }]}>
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          <Form.Item name="module" label="Module">
+            <Input autoComplete="off" />
+          </Form.Item>
+          <Form.Item name="description" label="Description">
+            <Input.TextArea rows={3} />
+          </Form.Item>
+          <Space size="large" wrap>
+            <Form.Item name="severity" label="Severity" style={{ minWidth: 180 }}>
+              <Select allowClear placeholder="Select" options={severityOptions.map((val) => ({ value: val, label: val }))} />
+            </Form.Item>
+            <Form.Item name="priority" label="Priority" style={{ minWidth: 160 }}>
+              <Select allowClear placeholder="Select" options={priorityOptions.map((val) => ({ value: val, label: val }))} />
+            </Form.Item>
+            <Form.Item name="status" label="Status" style={{ minWidth: 160 }}>
+              <Select allowClear placeholder="Select" options={statusOptions.map((val) => ({ value: val, label: val }))} />
+            </Form.Item>
+          </Space>
+          <Space size="large" wrap>
+            <Form.Item name="deliveryDate" label="Delivery Date">
+              <DatePicker style={{ width: 180 }} />
+            </Form.Item>
+            <Form.Item name="reportedDate" label="Reported Date">
+              <DatePicker style={{ width: 180 }} />
+            </Form.Item>
+            <Form.Item name="closedDate" label="Closed Date">
+              <DatePicker style={{ width: 180 }} />
+            </Form.Item>
+          </Space>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={fileModal.editing ? 'Edit Defect File' : 'New Defect File'}
+        open={fileModal.open}
+        onCancel={() => setFileModal({ open: false, editing: null })}
+        onOk={handleFileSubmit}
+        confirmLoading={saveFile.isPending}
+  destroyOnHidden
+      >
+        <Form layout="vertical" form={fileForm} preserve={false}>
+          <Form.Item name="projectId" label="Project" rules={[{ required: true, message: 'Project is required' }]}>
+            <Select
+              placeholder="Choose project"
+              options={projects.map((p) => ({ value: p.id, label: `${p.code} · ${p.name}` }))}
+              loading={projectsLoading}
+              showSearch
+              optionFilterProp="label"
+            />
+          </Form.Item>
+          <Form.Item name="name" label="Name" rules={[{ required: true, message: 'Name is required' }]}>
+            <Input autoComplete="off" />
+          </Form.Item>
+          <Form.Item name="version" label="Version">
+            <Input autoComplete="off" />
+          </Form.Item>
+          <Form.Item name="environment" label="Environment">
+            <Input autoComplete="off" />
+          </Form.Item>
+          <Form.Item name="releaseBuild" label="Release Build">
+            <Input autoComplete="off" />
+          </Form.Item>
+          <Form.Item name="refer" label="Reference">
+            <Input autoComplete="off" />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </Space>
+  );
 };
 
 export default DefectsPage;

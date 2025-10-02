@@ -14,6 +14,7 @@ export const AppShell = () => {
     { key: "/app", icon: <DashboardOutlined />, label: <Link to="/app">Dashboard</Link> },
     { key: "/app/projects", icon: <FolderOutlined />, label: <Link to="/app/projects">Projects</Link> },
     { key: "/app/test-cases", icon: <ExperimentOutlined />, label: <Link to="/app/test-cases">Test Cases</Link> },
+    { key: "/app/defects", icon: <BugOutlined />, label: <Link to="/app/defects">Defects</Link> },
     { key: "/app/audit", icon: <FileSearchOutlined />, label: <Link to="/app/audit">Audit</Link> }
   ];
 
