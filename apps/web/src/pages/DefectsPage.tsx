@@ -8,6 +8,7 @@ import {
   DatePicker,
   Form,
   Input,
+  InputNumber,
   Modal,
   Popconfirm,
   Select,
@@ -15,11 +16,14 @@ import {
   Table,
   Tag,
   Typography,
+  Upload,
   message
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import { UploadOutlined } from '@ant-design/icons';
+import type { UploadFile } from 'antd/es/upload/interface';
 
 dayjs.extend(relativeTime);
 
@@ -59,6 +63,17 @@ interface Defect {
   reportedByName?: string | null;
   artifactCount?: number;
   description?: string | null;
+  testData?: any;
+  actualResults?: string | null;
+  expectedResults?: string | null;
+  release?: string | null;
+  environment?: string | null;
+  rcaStatus?: string | null;
+  comments?: string | null;
+  triageComments?: string | null;
+  labels?: string | null;
+  assignedToId?: number | null;
+  reportedById?: number | null;
   deliveryDate?: string | null;
   reportedDate?: string | null;
   closedDate?: string | null;
@@ -129,10 +144,21 @@ const DefectsPage = () => {
   const [fileModal, setFileModal] = useState<{ open: boolean; editing: DefectFile | null }>({ open: false, editing: null });
   const [fileForm] = Form.useForm();
 
+  const [importOpen, setImportOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<any | null>(null);
+  const [importFiles, setImportFiles] = useState<UploadFile<any>[]>([]);
+
   useEffect(() => {
     if (defectModal.open) {
       if (defectModal.editing) {
         const record = defectModal.editing as any;
+        const testDataValue =
+          record.testData === null || typeof record.testData === 'undefined'
+            ? undefined
+            : typeof record.testData === 'object'
+              ? JSON.stringify(record.testData, null, 2)
+              : String(record.testData);
         defectForm.setFieldsValue({
           projectId: record.projectId,
           defectFileId: record.defectFileId ?? activeFile?.id,
@@ -143,6 +169,17 @@ const DefectsPage = () => {
           severity: record.severity ?? undefined,
           priority: record.priority ?? undefined,
           description: record.description ?? undefined,
+          testData: testDataValue,
+          actualResults: record.actualResults ?? undefined,
+          expectedResults: record.expectedResults ?? undefined,
+          release: record.release ?? undefined,
+          environment: record.environment ?? undefined,
+          rcaStatus: record.rcaStatus ?? undefined,
+          labels: record.labels ?? undefined,
+          comments: record.comments ?? undefined,
+          triageComments: record.triageComments ?? undefined,
+          assignedToId: record.assignedToId ?? undefined,
+          reportedById: record.reportedById ?? undefined,
           deliveryDate: record.deliveryDate ? dayjs(record.deliveryDate) : undefined,
           reportedDate: record.reportedDate ? dayjs(record.reportedDate) : undefined,
           closedDate: record.closedDate ? dayjs(record.closedDate) : undefined
@@ -231,9 +268,28 @@ const DefectsPage = () => {
     onError: (err: any) => message.error(err?.response?.data?.error?.message || 'Failed to delete defect')
   });
 
+  const renderTextCell = (value?: string | null) => (value ? <span title={value}>{value}</span> : '-');
+  const renderJsonCell = (value: any) => {
+    if (value === null || typeof value === 'undefined') return '-';
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed ? <span title={trimmed}>{trimmed}</span> : '-';
+    }
+    try {
+      const stringified = JSON.stringify(value);
+      return <span title={stringified}>{stringified}</span>;
+    } catch {
+      const fallback = String(value);
+      return fallback ? <span title={fallback}>{fallback}</span> : '-';
+    }
+  };
+  const renderDateCell = (value?: string | null) => (value ? dayjs(value).format('YYYY-MM-DD') : '-');
+
   const columns: ColumnsType<Defect> = [
-    { title: 'Defect ID', dataIndex: 'defectIdCode', key: 'defectIdCode', width: 140 },
-    { title: 'Title', dataIndex: 'title', key: 'title', ellipsis: true },
+    { title: 'Defect ID', dataIndex: 'defectIdCode', key: 'defectIdCode', width: 140, render: (value) => renderTextCell(value) },
+    { title: 'Title', dataIndex: 'title', key: 'title', width: 200, render: (value) => renderTextCell(value) },
+    { title: 'Module', dataIndex: 'module', key: 'module', width: 160, render: (value) => renderTextCell(value) },
+    { title: 'Defect File', dataIndex: 'defectFileName', key: 'defectFileName', width: 180, render: (value) => renderTextCell(value) },
     {
       title: 'Severity',
       dataIndex: 'severity',
@@ -255,6 +311,21 @@ const DefectsPage = () => {
       width: 130,
       render: (value) => (value ? <Tag color={value === 'closed' ? 'green' : value === 'resolved' ? 'blue' : 'gold'}>{value}</Tag> : '-')
     },
+    { title: 'Release', dataIndex: 'release', key: 'release', width: 140, render: (value) => renderTextCell(value) },
+    { title: 'Environment', dataIndex: 'environment', key: 'environment', width: 140, render: (value) => renderTextCell(value) },
+    { title: 'RCA Status', dataIndex: 'rcaStatus', key: 'rcaStatus', width: 150, render: (value) => renderTextCell(value) },
+    { title: 'Labels', dataIndex: 'labels', key: 'labels', width: 160, render: (value) => renderTextCell(value) },
+    { title: 'Assigned To', dataIndex: 'assignedToName', key: 'assignedToName', width: 180, render: (value) => renderTextCell(value) },
+    { title: 'Reported By', dataIndex: 'reportedByName', key: 'reportedByName', width: 180, render: (value) => renderTextCell(value) },
+    { title: 'Delivery Date', dataIndex: 'deliveryDate', key: 'deliveryDate', width: 140, render: (value) => renderDateCell(value) },
+    { title: 'Reported Date', dataIndex: 'reportedDate', key: 'reportedDate', width: 140, render: (value) => renderDateCell(value) },
+    { title: 'Closed Date', dataIndex: 'closedDate', key: 'closedDate', width: 140, render: (value) => renderDateCell(value) },
+    { title: 'Actual Results', dataIndex: 'actualResults', key: 'actualResults', width: 220, render: (value) => renderTextCell(value) },
+    { title: 'Expected Results', dataIndex: 'expectedResults', key: 'expectedResults', width: 220, render: (value) => renderTextCell(value) },
+    { title: 'Test Data', dataIndex: 'testData', key: 'testData', width: 220, render: (_, record) => renderJsonCell(record.testData) },
+    { title: 'Comments', dataIndex: 'comments', key: 'comments', width: 220, render: (value) => renderTextCell(value) },
+    { title: 'Triage Comments', dataIndex: 'triageComments', key: 'triageComments', width: 220, render: (value) => renderTextCell(value) },
+    { title: 'Description', dataIndex: 'description', key: 'description', width: 240, render: (value) => renderTextCell(value) },
     {
       title: 'Updated',
       dataIndex: 'updatedAt',
@@ -266,7 +337,7 @@ const DefectsPage = () => {
       title: 'Actions',
       key: 'actions',
       fixed: 'right',
-      width: 160,
+      width: 180,
       render: (_, record) => (
         <Space>
           <Button type="link" onClick={() => setDefectModal({ open: true, editing: record })}>
@@ -290,14 +361,34 @@ const DefectsPage = () => {
     defectForm
       .validateFields()
       .then((values) => {
+        const projectIdRaw = values.projectId ?? activeFile?.projectId;
+        const defectFileIdRaw = values.defectFileId ?? activeFile?.id;
+        const assignedToIdRaw = values.assignedToId;
+        const reportedByIdRaw = values.reportedById;
         const payload = {
           ...values,
-          projectId: Number(values.projectId ?? activeFile?.projectId),
-          defectFileId: Number(values.defectFileId ?? activeFile?.id),
+          projectId: projectIdRaw ? Number(projectIdRaw) : undefined,
+          defectFileId: defectFileIdRaw ? Number(defectFileIdRaw) : undefined,
+          assignedToId:
+            assignedToIdRaw === null || typeof assignedToIdRaw === 'undefined' ? undefined : Number(assignedToIdRaw),
+          reportedById:
+            reportedByIdRaw === null || typeof reportedByIdRaw === 'undefined' ? undefined : Number(reportedByIdRaw),
           deliveryDate: values.deliveryDate ? values.deliveryDate.toISOString() : undefined,
           reportedDate: values.reportedDate ? values.reportedDate.toISOString() : undefined,
           closedDate: values.closedDate ? values.closedDate.toISOString() : undefined
         };
+        if (typeof payload.testData === 'string') {
+          const trimmed = payload.testData.trim();
+          if (!trimmed) {
+            payload.testData = undefined;
+          } else {
+            try {
+              payload.testData = JSON.parse(trimmed);
+            } catch {
+              payload.testData = trimmed;
+            }
+          }
+        }
         if (!payload.projectId) {
           message.error('Project is required');
           return;
@@ -382,15 +473,163 @@ const DefectsPage = () => {
       )}
 
       <Card title={activeFile ? `Defects · ${activeFile.name}` : 'Defects'}>
+        <Space style={{ marginBottom: 16 }} wrap>
+          <Button
+            type="primary"
+            onClick={() => setDefectModal({ open: true, editing: null })}
+            disabled={!activeFile}
+          >
+            New Defect
+          </Button>
+          <Button onClick={() => setImportOpen(true)} icon={<UploadOutlined />}>Import</Button>
+          <Button
+            onClick={async () => {
+              try {
+                const params = new URLSearchParams();
+                if (selectedFileId) params.append('fileId', String(selectedFileId));
+                if (projectFilter) params.append('projectId', String(projectFilter));
+                const query = params.toString();
+                const res = await api.get(`/defects/export/xlsx${query ? `?${query}` : ''}`, { responseType: 'blob' });
+                const url = URL.createObjectURL(res.data);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'defects.xlsx';
+                a.click();
+                URL.revokeObjectURL(url);
+              } catch (err: any) {
+                message.error(err?.response?.data?.error?.message || 'Export failed');
+              }
+            }}
+          >
+            Export
+          </Button>
+          <Button
+            onClick={async () => {
+              try {
+                const res = await api.get('/defects/template/xlsx', { responseType: 'blob' });
+                const url = URL.createObjectURL(res.data);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'defects-template.xlsx';
+                a.click();
+                URL.revokeObjectURL(url);
+              } catch (err: any) {
+                message.error(err?.response?.data?.error?.message || 'Template download failed');
+              }
+            }}
+          >
+            Template
+          </Button>
+        </Space>
         <Table
           rowKey="id"
           loading={busy}
           dataSource={defects}
           columns={columns}
           pagination={{ pageSize: 10 }}
-          scroll={{ x: 900 }}
+          scroll={{ x: 2600 }}
         />
       </Card>
+
+      <Modal
+        title="Import Defects"
+        open={importOpen}
+        onCancel={() => {
+          setImportOpen(false);
+          setImportResult(null);
+          setImportFiles([]);
+        }}
+        onOk={() => {
+          setImportOpen(false);
+          setImportResult(null);
+          setImportFiles([]);
+        }}
+        okText="Close"
+        destroyOnHidden
+      >
+        <Upload
+          beforeUpload={() => false}
+          maxCount={1}
+          accept=".xlsx,.csv"
+          fileList={importFiles}
+          onChange={({ fileList }) => setImportFiles(fileList as UploadFile<any>[])}
+        >
+          <Button icon={<UploadOutlined />}>Select File</Button>
+        </Upload>
+        <div style={{ marginTop: 8, fontSize: 12, lineHeight: 1.5, color: '#555' }}>
+          Include columns such as <code>projectId</code>, <code>defectIdCode</code>, <code>title</code>, optional{' '}
+          <code>defectFileId</code>/<code>defectFileName</code> and{' '}
+          <code>assignedToId</code>/<code>assignedToEmail</code>,{' '}
+          <code>reportedById</code>/<code>reportedByEmail</code>, plus any other defect fields you wish to update.
+          Dates accept ISO strings or Excel serial numbers.
+        </div>
+        <Button
+          disabled={!importFiles.length}
+          loading={importing}
+          style={{ marginTop: 12 }}
+          onClick={async () => {
+            if (!importFiles.length) return;
+            const first = importFiles[0];
+            if (!first?.originFileObj) {
+              message.error('Select a file to import');
+              return;
+            }
+            setImporting(true);
+            try {
+              const fd = new FormData();
+              fd.append('file', first.originFileObj as File);
+              const res = await api.post('/defects/import/xlsx', fd, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+              });
+              setImportResult(res.data.data);
+              message.success('Import complete');
+              qc.invalidateQueries({ queryKey: ['defects'] });
+            } catch (err: any) {
+              message.error(err?.response?.data?.error?.message || 'Import failed');
+            } finally {
+              setImporting(false);
+            }
+          }}
+        >
+          Upload &amp; Process
+        </Button>
+        {importResult && (
+          <div style={{ marginTop: 16 }}>
+            <strong>Summary:</strong>
+            <br />
+            {(() => {
+              const summary = importResult.summary || { created: 0, failed: 0 };
+              return (
+                <span>
+                  Created/Updated: {summary.created} | Failed: {summary.failed}
+                </span>
+              );
+            })()}
+            {Array.isArray(importResult.parseErrors) && importResult.parseErrors.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <strong>Parser warnings:</strong>
+                <div style={{ maxHeight: 120, overflow: 'auto', marginTop: 4 }}>
+                  {importResult.parseErrors.map((err: string, idx: number) => (
+                    <div key={idx}>{err}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {Array.isArray(importResult.failed) && importResult.failed.length > 0 && (
+              <div style={{ maxHeight: 120, overflow: 'auto', marginTop: 8 }}>
+                {importResult.failed.slice(0, 25).map((failure: any, idx: number) => (
+                  <div key={idx}>
+                    Row {failure.row}: {Array.isArray(failure.errors) ? failure.errors.join(', ') : failure.errors}
+                  </div>
+                ))}
+                {importResult.failed.length > 25 && (
+                  <div>... {importResult.failed.length - 25} more</div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
 
       <Modal
         title={defectModal.editing ? 'Edit Defect' : 'New Defect'}
@@ -433,6 +672,15 @@ const DefectsPage = () => {
           <Form.Item name="description" label="Description">
             <Input.TextArea rows={3} />
           </Form.Item>
+          <Form.Item name="testData" label="Test Data (JSON)">
+            <Input.TextArea rows={3} placeholder='{"steps":[]}' />
+          </Form.Item>
+          <Form.Item name="actualResults" label="Actual Results">
+            <Input.TextArea rows={3} />
+          </Form.Item>
+          <Form.Item name="expectedResults" label="Expected Results">
+            <Input.TextArea rows={3} />
+          </Form.Item>
           <Space size="large" wrap>
             <Form.Item name="severity" label="Severity" style={{ minWidth: 180 }}>
               <Select allowClear placeholder="Select" options={severityOptions.map((val) => ({ value: val, label: val }))} />
@@ -444,6 +692,34 @@ const DefectsPage = () => {
               <Select allowClear placeholder="Select" options={statusOptions.map((val) => ({ value: val, label: val }))} />
             </Form.Item>
           </Space>
+          <Space size="large" wrap>
+            <Form.Item name="release" label="Release" style={{ minWidth: 180 }}>
+              <Input autoComplete="off" />
+            </Form.Item>
+            <Form.Item name="environment" label="Environment" style={{ minWidth: 180 }}>
+              <Input autoComplete="off" />
+            </Form.Item>
+            <Form.Item name="labels" label="Labels (CSV)" style={{ minWidth: 200 }}>
+              <Input autoComplete="off" />
+            </Form.Item>
+            <Form.Item name="rcaStatus" label="RCA Status" style={{ minWidth: 200 }}>
+              <Input autoComplete="off" />
+            </Form.Item>
+          </Space>
+          <Space size="large" wrap>
+            <Form.Item name="assignedToId" label="Assigned To (User ID)" style={{ minWidth: 200 }}>
+              <InputNumber min={1} style={{ width: '100%' }} placeholder="Enter ID" />
+            </Form.Item>
+            <Form.Item name="reportedById" label="Reported By (User ID)" style={{ minWidth: 200 }}>
+              <InputNumber min={1} style={{ width: '100%' }} placeholder="Enter ID" />
+            </Form.Item>
+          </Space>
+          <Form.Item name="comments" label="Comments">
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          <Form.Item name="triageComments" label="Triage Comments">
+            <Input.TextArea rows={2} />
+          </Form.Item>
           <Space size="large" wrap>
             <Form.Item name="deliveryDate" label="Delivery Date">
               <DatePicker style={{ width: 180 }} />
