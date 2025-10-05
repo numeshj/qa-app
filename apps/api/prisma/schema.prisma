@@ -66,7 +66,7 @@ model Project {
   code        String     @unique
   name        String
   description String?
-  status      String       @default("active")
+  status      String       @default("ongoing")
   startDate   DateTime?   @map("start_date")
   endDate     DateTime?   @map("end_date")
   owner       User?       @relation("ProjectOwner", fields: [ownerId], references: [id])

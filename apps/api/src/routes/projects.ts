@@ -5,11 +5,13 @@ import { z } from 'zod';
 
 const router = Router();
 
+const projectStatusOptions = ['ongoing', 'completed', 'yet_to_start', 'other'] as const;
+
 const projectSchema = z.object({
   code: z.string().min(1),
   name: z.string().min(1),
   description: z.string().optional(),
-  status: z.enum(['active','completed','on_hold']).optional()
+  status: z.enum(projectStatusOptions).optional()
 });
 
 router.get('/', requireAuth, async (_req: Request, res: Response) => {
@@ -21,7 +23,8 @@ router.get('/', requireAuth, async (_req: Request, res: Response) => {
 router.post('/', requireAuth, async (req: Request, res: Response) => {
   const parsed = projectSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid', details: parsed.error.flatten().fieldErrors } });
-  const project = await prisma.project.create({ data: parsed.data });
+  const payload = parsed.data.status ? parsed.data : { ...parsed.data, status: 'ongoing' };
+  const project = await prisma.project.create({ data: payload });
   res.status(201).json({ success: true, data: project });
 });
 
