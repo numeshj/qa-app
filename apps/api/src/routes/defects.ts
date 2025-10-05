@@ -4,6 +4,7 @@ import { requireAuth } from '../middlewares/auth';
 import { z } from 'zod';
 import multer from 'multer';
 import { parseSheet, buildTemplate } from '../utils/xlsx';
+import { recordAuditLog } from '../utils/audit';
 
 const router = Router();
 
@@ -509,6 +510,13 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
         closedDate: toDate(closedDate as any)
       }
     });
+    await recordAuditLog({
+      entity: 'defect',
+      entityId: created.id,
+      action: 'create',
+      after: created,
+      userId: req.auth?.userId ?? null
+    });
     res.status(201).json({ success: true, data: created });
   } catch (err: any) {
     const message = err?.message === 'Invalid date' ? 'Invalid date format' : (err?.message || 'Failed to create defect');
@@ -524,6 +532,10 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
     return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid body', details: parsed.error.flatten().fieldErrors } });
   }
   const payload = parsed.data;
+  const existing = await prisma.defect.findUnique({ where: { id } });
+  if (!existing) {
+    return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Defect not found' } });
+  }
   try {
     const { deliveryDate, reportedDate, closedDate, ...rest } = payload;
     const updated = await prisma.defect.update({
@@ -534,6 +546,14 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
         reportedDate: reportedDate !== undefined ? toDate(reportedDate as any) : undefined,
         closedDate: closedDate !== undefined ? toDate(closedDate as any) : undefined
       }
+    });
+    await recordAuditLog({
+      entity: 'defect',
+      entityId: id,
+      action: 'update',
+      before: existing,
+      after: updated,
+      userId: req.auth?.userId ?? null
     });
     res.json({ success: true, data: updated });
   } catch (err: any) {
@@ -547,11 +567,23 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
 router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   if (Number.isNaN(id)) return res.status(400).json({ success: false, error: { code: 'INVALID_ID', message: 'Invalid defect id' } });
+  const existing = await prisma.defect.findUnique({ where: { id } });
+  if (!existing) {
+    return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Defect not found' } });
+  }
   try {
     await prisma.defect.delete({ where: { id } });
+    await recordAuditLog({
+      entity: 'defect',
+      entityId: id,
+      action: 'delete',
+      before: existing,
+      after: null,
+      userId: req.auth?.userId ?? null
+    });
     res.json({ success: true, data: { deleted: true } });
   } catch {
-    res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Defect not found' } });
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: 'Failed to delete defect' } });
   }
 });
 

@@ -5,6 +5,7 @@ import { upload } from '../middlewares/upload';
 import { z } from 'zod';
 import { parseSheet, buildTemplate } from '../utils/xlsx';
 import { asyncHandler } from '../utils/asyncHandler';
+import { recordAuditLog } from '../utils/audit';
 import multer from 'multer';
 
 const router = Router();
@@ -102,6 +103,13 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
   // Ensure JSON fields are stored correctly
   const data = { ...parsed.data, inputData: parsed.data.inputData ?? undefined } as any;
   const tc = await prisma.testCase.create({ data });
+  await recordAuditLog({
+    entity: 'test_case',
+    entityId: tc.id,
+    action: 'create',
+    after: tc,
+    userId: req.auth?.userId ?? null
+  });
   res.status(201).json({ success: true, data: tc });
 });
 
@@ -109,20 +117,44 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const parsed = baseSchema.partial().safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid', details: parsed.error.flatten().fieldErrors } });
+  const existing = await prisma.testCase.findUnique({ where: { id } });
+  if (!existing) {
+    return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Test case not found' } });
+  }
   try {
-  const data = { ...parsed.data, inputData: parsed.data.inputData ?? undefined } as any;
-  const updated = await prisma.testCase.update({ where: { id }, data });
+    const data = { ...parsed.data, inputData: parsed.data.inputData ?? undefined } as any;
+    const updated = await prisma.testCase.update({ where: { id }, data });
+    await recordAuditLog({
+      entity: 'test_case',
+      entityId: id,
+      action: 'update',
+      before: existing,
+      after: updated,
+      userId: req.auth?.userId ?? null
+    });
     res.json({ success: true, data: updated });
   } catch {
-    return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Test case not found' } });
+    return res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: 'Failed to update test case' } });
   }
 });
 
 // Delete a test case (hard delete since soft delete removed)
 router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
   const id = Number(req.params.id);
+  const existing = await prisma.testCase.findUnique({ where: { id } });
+  if (!existing) {
+    return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Test case not found' } });
+  }
   try {
     await prisma.testCase.delete({ where: { id } });
+    await recordAuditLog({
+      entity: 'test_case',
+      entityId: id,
+      action: 'delete',
+      before: existing,
+      after: null,
+      userId: req.auth?.userId ?? null
+    });
     res.json({ success: true, data: { deleted: true, mode: 'hard' } });
   } catch {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: 'Failed to delete test case' } });

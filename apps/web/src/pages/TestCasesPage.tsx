@@ -1,11 +1,10 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../api/client';
-import { Button, Card, Form, Input, Modal, Select, Space, Table, Upload, message, Tag, Spin, Popconfirm, Alert } from 'antd';
-import { UploadOutlined } from '@ant-design/icons';
-import { useState } from 'react';
-import { useRef } from 'react';
-import type { UploadFile } from 'antd/es/upload/interface';
-import { useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { api } from "../api/client";
+import { Button, Card, Form, Input, Modal, Select, Space, Table, Upload, message, Tag, Spin, Popconfirm, Alert } from "antd";
+import { UploadOutlined } from "@ant-design/icons";
+import { useState, useRef, useEffect, useMemo } from "react";
+import type { UploadFile } from "antd/es/upload/interface";
+import type { CSSProperties } from "react";
 
 interface TestCase { id: number; testCaseIdCode: string; description?: string | null; severity?: string | null; complexity?: string | null; projectId: number; testCaseFileId?: number | null; testCaseFileName?: string | null; }
 interface Project { id: number; code: string; name: string; }
@@ -127,6 +126,81 @@ const TestCasesPage = () => {
   const [importOpen, setImportOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<any | null>(null);
+
+  const theme = useMemo(() => {
+    return {
+      wrapper: {
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        gap: 24,
+        minHeight: 0,
+        padding: 24,
+        background:
+          "linear-gradient(135deg, rgba(30, 64, 175, 0.22) 0%, rgba(17, 94, 89, 0.22) 45%, rgba(56, 189, 248, 0.18) 100%)",
+        borderRadius: 28,
+        border: "1px solid rgba(148, 163, 184, 0.25)",
+        boxShadow: "0 32px 64px rgba(15, 23, 42, 0.45)",
+        backdropFilter: "blur(10px)",
+        color: "#e2e8f0"
+      } satisfies CSSProperties,
+      card: {
+        background: "rgba(15, 23, 42, 0.86)",
+        borderRadius: 24,
+        border: "1px solid rgba(96, 165, 250, 0.28)",
+        boxShadow: "0 24px 45px rgba(30, 64, 175, 0.35)"
+      } satisfies CSSProperties,
+      head: {
+        background: "linear-gradient(135deg, rgba(59, 130, 246, 0.5) 0%, rgba(30, 64, 175, 0.85) 75%)",
+        color: "#e0f2fe",
+        borderBottom: "1px solid rgba(148, 163, 184, 0.35)",
+        textTransform: "uppercase",
+        letterSpacing: 0.8,
+        fontSize: 20,
+        fontWeight: 600
+      } satisfies CSSProperties,
+      body: {
+        background: "linear-gradient(180deg, rgba(15, 23, 42, 0.82) 0%, rgba(15, 23, 42, 0.66) 100%)",
+        color: "#e2e8f0",
+        minHeight: 0
+      } satisfies CSSProperties,
+      primaryButton: {
+        background: "linear-gradient(135deg, #22d3ee 0%, #3b82f6 100%)",
+        border: "none",
+        boxShadow: "0 12px 26px rgba(14, 165, 233, 0.35)",
+        fontWeight: 600
+      } satisfies CSSProperties,
+      softButton: {
+        background: "rgba(148, 163, 184, 0.16)",
+        border: "1px solid rgba(148, 163, 184, 0.3)",
+        color: "#f8fafc"
+      } satisfies CSSProperties,
+      tableContainer: {
+        flex: 1,
+        minHeight: 0,
+        overflow: "auto"
+      } satisfies CSSProperties,
+      table: {
+        background: "transparent",
+        color: "#e2e8f0"
+      } satisfies CSSProperties,
+      modal: {
+        borderRadius: 24,
+        overflow: "hidden",
+        padding: 0,
+        background: "rgba(15, 23, 42, 0.95)"
+      } satisfies CSSProperties,
+      modalBody: {
+        background: "linear-gradient(135deg, rgba(30, 64, 175, 0.55) 0%, rgba(13, 148, 136, 0.55) 100%)",
+        paddingTop: 24
+      } satisfies CSSProperties,
+      alert: {
+        background: "linear-gradient(135deg, rgba(59, 130, 246, 0.24) 0%, rgba(16, 185, 129, 0.22) 100%)",
+        border: "1px solid rgba(148, 163, 184, 0.35)",
+        color: "#f0f9ff"
+      } satisfies CSSProperties
+    };
+  }, []);
 
   const saveMutation = useMutation({
     mutationFn: async (values: any) => {
@@ -323,232 +397,514 @@ const TestCasesPage = () => {
           </Popconfirm>
         </Space>, width: 160 }
     ];
-    return <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-      <Card
-        title='Test Case Files'
-        extra={<Button type='primary' onClick={() => { setEditingFile(null); fileForm.resetFields(); setFileModalOpen(true); }}>New File</Button>}
-        styles={{ body: { padding: 12, display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 } }}
-        style={{ flex: 1, minHeight: 0 }}
-      >
-        <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-          <Table
-            rowKey='id'
-            size='small'
-            loading={testCaseFiles.isLoading}
-            dataSource={testCaseFiles.data?.data || []}
-            columns={fileColumns as any}
-            pagination={false}
-            onRow={(r) => ({ onDoubleClick: () => setActiveFile(r) })}
-            scroll={{ x: 1200 }}
-          />
-        </div>
-      </Card>
-      <Modal open={fileModalOpen} onCancel={() => setFileModalOpen(false)} onOk={() => fileForm.submit()} title={editingFile ? 'Edit Test Case File' : 'New Test Case File'} destroyOnHidden>
-        <Form form={fileForm} layout='vertical' onFinish={(v)=> saveFileMutation.mutate(v)} initialValues={{ version: '1.0' }}>
-          <Form.Item name='projectId' label='Project' rules={[{ required: true }]}>
-            <Select options={(projects.data?.data || []).map(p => ({ value: p.id, label: `${p.code}` }))} loading={projects.isLoading} showSearch optionFilterProp='label' />
-          </Form.Item>
-          <Form.Item name='name' label='File Name' rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name='version' label='Version'><Input /></Form.Item>
-            <Form.Item name='environment' label='Environment'><Input /></Form.Item>
-            <Form.Item name='releaseBuild' label='Release / Build'><Input /></Form.Item>
-            <Form.Item name='refer' label='Refer'><Input /></Form.Item>
-        </Form>
-      </Modal>
-    </div>;
+    return (
+      <div style={theme.wrapper}>
+        <Card
+          title="Test Case Files"
+          extra={
+            <Button
+              type="primary"
+              style={theme.primaryButton}
+              onClick={() => {
+                setEditingFile(null);
+                fileForm.resetFields();
+                setFileModalOpen(true);
+              }}
+            >
+              New File
+            </Button>
+          }
+          style={{ ...theme.card, flex: 1, minHeight: 0 }}
+          headStyle={theme.head}
+          bodyStyle={{ ...theme.body, padding: 12, gap: 8, display: "flex", flexDirection: "column" }}
+        >
+          <div style={theme.tableContainer}>
+            <Table
+              rowKey="id"
+              size="small"
+              loading={testCaseFiles.isLoading}
+              dataSource={testCaseFiles.data?.data || []}
+              columns={fileColumns as any}
+              pagination={false}
+              onRow={(r) => ({ onDoubleClick: () => setActiveFile(r) })}
+              scroll={{ x: 1200 }}
+              style={theme.table}
+            />
+          </div>
+        </Card>
+        <Modal
+          open={fileModalOpen}
+          onCancel={() => setFileModalOpen(false)}
+          onOk={() => fileForm.submit()}
+          title={editingFile ? "Edit Test Case File" : "New Test Case File"}
+          destroyOnHidden
+          style={theme.modal}
+          bodyStyle={{ ...theme.modalBody, paddingInline: 24 }}
+          okText={editingFile ? "Save File" : "Create File"}
+          okButtonProps={{ style: theme.primaryButton }}
+        >
+          <Form form={fileForm} layout="vertical" onFinish={(v) => saveFileMutation.mutate(v)} initialValues={{ version: "1.0" }}>
+            <Form.Item name="projectId" label="Project" rules={[{ required: true }]}>
+              <Select
+                options={(projects.data?.data || []).map((p) => ({ value: p.id, label: `${p.code}` }))}
+                loading={projects.isLoading}
+                showSearch
+                optionFilterProp="label"
+              />
+            </Form.Item>
+            <Form.Item name="name" label="File Name" rules={[{ required: true }]}>
+              <Input placeholder="Friendly name" />
+            </Form.Item>
+            <Form.Item name="version" label="Version">
+              <Input />
+            </Form.Item>
+            <Form.Item name="environment" label="Environment">
+              <Input />
+            </Form.Item>
+            <Form.Item name="releaseBuild" label="Release / Build">
+              <Input />
+            </Form.Item>
+            <Form.Item name="refer" label="Refer">
+              <Input />
+            </Form.Item>
+          </Form>
+        </Modal>
+      </div>
+    );
   }
 
-  return <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
-  <Card
-    styles={{ body: { padding: 12, display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 } }}
-    title={`Test Cases - ${activeFile?.name || ''}`}
-    extra={<Space>
-      <Button onClick={() => setActiveFile(null)}>Back to Files</Button>
-      <Button type='primary' onClick={() => { if (!activeFile) { message.warning('Select a file first'); return; } setEditing(null); form.resetFields(); if (activeFile) form.setFieldsValue({ projectId: activeFile.projectId }); setOpen(true); }}>New</Button>
-    </Space>}
-    style={{ flex: 1, minHeight: 0 }}
-  >
-    <div style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-      <Button onClick={() => setImportOpen(true)}>Import</Button>
-      <Button onClick={async () => {
-        try {
-          const res = await api.get('/test-cases/export/xlsx', { responseType: 'blob' });
-          const url = URL.createObjectURL(res.data);
-          const a = document.createElement('a'); a.href = url; a.download = 'test-cases.xlsx'; a.click(); URL.revokeObjectURL(url);
-        } catch(e:any){ message.error('Export failed'); }
-      }}>Export</Button>
-      <Button onClick={async () => {
-        try {
-          const res = await api.get('/test-cases/template/xlsx', { responseType: 'blob' });
-          const url = URL.createObjectURL(res.data);
-          const a = document.createElement('a'); a.href = url; a.download = 'test-cases-template.xlsx'; a.click(); URL.revokeObjectURL(url);
-        } catch(e:any){ message.error('Template download failed'); }
-      }}>Template</Button>
-    </div>
-    {activeFile && showAttachPrompt && !isLoading && data && data.data.length === 0 && (
-      <Alert
-        type='info'
-        showIcon
-        message='No test cases in this file yet'
-        description={<div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div>
-            {unassignedQuery.isLoading && 'Checking for existing project test cases...'}
-            {unassignedQuery.data && unassignedQuery.data.data.filter(tc => !(tc as any).testCaseFileId).length > 0 && (
-              <>
-                Found {unassignedQuery.data.data.filter(tc => !(tc as any).testCaseFileId).length} test case(s) in the same project not yet attached.<br />
-                <Space>
-                  <Button size='small' loading={bulkAssignMutation.isPending} onClick={() => bulkAssignMutation.mutate(unassignedQuery.data!.data.filter(tc => !(tc as any).testCaseFileId).map(tc => tc.id))}>Attach All</Button>
-                  <Button size='small' onClick={() => setShowAttachPrompt(false)}>Dismiss</Button>
-                </Space>
-              </>
-            )}
-            {unassignedQuery.data && unassignedQuery.data.data.filter(tc => !(tc as any).testCaseFileId).length === 0 && !unassignedQuery.isLoading && 'No unattached test cases in this project.'}
-          </div>
-        </div>}
-        style={{ marginBottom: 12 }}
-      />
-    )}
-    <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-      <Table
-        size='small'
-        sticky
-        rowKey='id'
-        loading={isLoading}
-        dataSource={data?.data || []}
-        columns={columns as any}
-        pagination={false}
-        scroll={{ x: 1600 }}
-      />
-    </div>
-  <Modal open={open} onCancel={() => setOpen(false)} onOk={() => form.submit()} title={editing ? 'Edit Test Case' : 'New Test Case'} destroyOnHidden>
-      <Form form={form} layout='vertical' onFinish={(v) => saveMutation.mutate(v)} initialValues={{ testCaseIdCode: '', projectId: activeFile?.projectId, testCaseFileId: activeFile?.id }} style={{ maxHeight: '60vh', overflow: 'auto', paddingRight: 4 }}>
-        <Form.Item name='projectId' label='Project' rules={[{ required: true }]}>
-          <Select disabled={!!activeFile} options={(projects.data?.data || []).map(p => ({ value: p.id, label: p.code }))} loading={projects.isLoading} showSearch optionFilterProp='label' />
-        </Form.Item>
-        <Form.Item name='testCaseFileId' label='Test Case File Id'>
-          <Input disabled value={activeFile?.id} />
-        </Form.Item>
-        <Form.Item label='Test Case File Name'>
-          <Input disabled value={activeFile?.name} />
-        </Form.Item>
-        <Form.Item name='testCaseIdCode' label='Test Case ID' rules={[{ required: true }]}><Input /></Form.Item>
-        <Form.Item name='category' label='Category'><Input /></Form.Item>
-        <Form.Item name='featureName' label='Feature'><Input /></Form.Item>
-        <Form.Item name='description' label='Description'><Input.TextArea rows={3} /></Form.Item>
-        <Form.Item name='subFunctionality' label='Sub Functionality'><Input /></Form.Item>
-        <Form.Item name='preRequisite' label='Pre-requisite'><Input /></Form.Item>
-        <Form.Item name='inputData' label='Input Data (JSON)'><Input.TextArea rows={2} /></Form.Item>
-        <Form.Item name='expectedResult' label='Expected Result'><Input.TextArea rows={2} /></Form.Item>
-        <Form.Item name='severity' label='Severity'>
-          <Select options={(severity.data?.data || []).map(l => ({ value: l.code, label: l.code }))} loading={severity.isLoading} allowClear />
-        </Form.Item>
-        <Form.Item name='complexity' label='Complexity'>
-          <Select options={(complexity.data?.data || []).map(l => ({ value: l.code, label: l.code }))} loading={complexity.isLoading} allowClear />
-        </Form.Item>
-        <Form.Item name='actualResult' label='Actual Result'><Input.TextArea rows={2} /></Form.Item>
-        <Form.Item name='status' label='Status'>
-          <Select options={['Pass','Fail','On_Hold','Not_Applicable','Cannot_be_Executed','Blocked'].map(v => ({ value: v, label: v }))} allowClear />
-        </Form.Item>
-        <Form.Item name='defectIdRef' label='Defect ID / Description'><Input /></Form.Item>
-        <Form.Item name='comments' label='Comments'><Input.TextArea rows={2} /></Form.Item>
-        <Form.Item name='labels' label='Labels (CSV)'><Input /></Form.Item>
-      </Form>
-    </Modal>
-  <Modal open={importOpen} title='Import Test Cases' onCancel={() => { setImportOpen(false); setImportResult(null); }} onOk={() => { /* trigger close */ setImportOpen(false); setImportResult(null); }} okText='Close' destroyOnHidden>
-      <Upload beforeUpload={() => false} maxCount={1} onChange={({ fileList }) => setFileList(fileList)} fileList={fileList} accept='.xlsx,.csv'>
-        <Button icon={<UploadOutlined />}>Select File</Button>
-      </Upload>
-      <div style={{ marginTop: 8, fontSize: 12, lineHeight: 1.4, color: '#555' }}>
-        Template columns now include: <code>projectId</code>, <code>testCaseIdCode</code>, <code>testCaseFileId</code>, <code>testCaseFileName</code>, plus existing fields. You may supply either testCaseFileId or testCaseFileName (scoped by project). If this modal was opened while a file is selected, leaving both blank will still attach via the active file.
-      </div>
-      <Button disabled={!fileList.length} loading={importing} style={{ marginTop: 12 }} onClick={async () => {
-        if (!fileList.length) return; setImporting(true);
-        try {
-          const fd = new FormData();
-            fd.append('file', fileList[0].originFileObj);
-            const res = await api.post('/test-cases/import/xlsx', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-            setImportResult(res.data.data);
-            message.success('Import complete');
-            qc.invalidateQueries({ queryKey: ['test-cases'] });
-        } catch (e: any) {
-          message.error(e.response?.data?.error?.message || 'Import failed');
-        } finally {
-          setImporting(false);
+  return (
+    <div style={theme.wrapper}>
+      <Card
+        title={`Test Cases - ${activeFile?.name || ""}`}
+        extra={
+          <Space>
+            <Button style={{ ...theme.softButton, boxShadow: "none" }} onClick={() => setActiveFile(null)}>
+              Back to Files
+            </Button>
+            <Button
+              type="primary"
+              style={theme.primaryButton}
+              onClick={() => {
+                if (!activeFile) {
+                  message.warning("Select a file first");
+                  return;
+                }
+                setEditing(null);
+                form.resetFields();
+                if (activeFile) form.setFieldsValue({ projectId: activeFile.projectId });
+                setOpen(true);
+              }}
+            >
+              New
+            </Button>
+          </Space>
         }
-      }}>Upload & Process</Button>
-      {importResult && <div style={{ marginTop: 16 }}>
-        <strong>Summary:</strong><br />
-        Created/Updated: {importResult.summary.created} | Failed: {importResult.summary.failed}
-        {importResult.failed.length > 0 && <div style={{ maxHeight: 120, overflow: 'auto', marginTop: 8 }}>
-          {importResult.failed.slice(0,25).map((f: any, i: number) => <div key={i}>Row {f.row}: {f.errors.join(', ')}</div>)}
-          {importResult.failed.length > 25 && <div>... {importResult.failed.length - 25} more</div>}
-        </div>}
-      </div>}
-    </Modal>
-  <Modal open={artifactModal.open} onCancel={() => { setArtifactModal({ open: false, testCase: null }); setFileList([]); setArtifactList(null); setUploadingArtifacts(false); }} onOk={() => { setArtifactModal({ open: false, testCase: null }); setFileList([]); setArtifactList(null); setUploadingArtifacts(false); }} title={`Artifacts - ${artifactModal.testCase?.testCaseIdCode}`} destroyOnHidden width={760}>
-      {artifactModal.testCase && <>
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        <Upload
-          fileList={fileList}
-          multiple
-          beforeUpload={() => false}
-          onChange={({ fileList }) => setFileList(fileList)}
-          accept='image/*,video/*'
-        >
-          <Button icon={<UploadOutlined />}>Select Files</Button>
-        </Upload>
-        <Button type='primary' disabled={!fileList.length || uploadingArtifacts} loading={uploadingArtifacts} onClick={async () => {
-          if (!fileList.length) return;
-          setUploadingArtifacts(true);
-          try {
-            for (const f of fileList) {
-              if (!f.originFileObj) continue;
-              const formData = new FormData();
-              formData.append('file', f.originFileObj as File);
-              await api.post(`/test-cases/${artifactModal.testCase!.id}/artifacts`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+        style={{ ...theme.card, flex: 1, minHeight: 0 }}
+        headStyle={theme.head}
+        bodyStyle={{ ...theme.body, padding: 16, gap: 16, display: "flex", flexDirection: "column" }}
+      >
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Button style={theme.softButton} onClick={() => setImportOpen(true)}>
+            Import
+          </Button>
+          <Button
+            style={theme.softButton}
+            onClick={async () => {
+              try {
+                const res = await api.get('/test-cases/export/xlsx', { responseType: 'blob' });
+                const url = URL.createObjectURL(res.data);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'test-cases.xlsx';
+                a.click();
+                URL.revokeObjectURL(url);
+              } catch (e: any) {
+                message.error('Export failed');
+              }
+            }}
+          >
+            Export
+          </Button>
+          <Button
+            style={theme.softButton}
+            onClick={async () => {
+              try {
+                const res = await api.get('/test-cases/template/xlsx', { responseType: 'blob' });
+                const url = URL.createObjectURL(res.data);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'test-cases-template.xlsx';
+                a.click();
+                URL.revokeObjectURL(url);
+              } catch (e: any) {
+                message.error('Template download failed');
+              }
+            }}
+          >
+            Template
+          </Button>
+        </div>
+        {activeFile && showAttachPrompt && !isLoading && data && data.data.length === 0 && (
+          <Alert
+            type="info"
+            showIcon
+            message="No test cases in this file yet"
+            style={{ ...theme.alert, marginBottom: 12 }}
+            description={
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div>
+                  {unassignedQuery.isLoading && "Checking for existing project test cases..."}
+                  {unassignedQuery.data &&
+                    unassignedQuery.data.data.filter(tc => !(tc as any).testCaseFileId).length > 0 && (
+                      <>
+                        Found {unassignedQuery.data.data.filter(tc => !(tc as any).testCaseFileId).length} test case(s) in the same project not yet attached.<br />
+                        <Space>
+                          <Button
+                            size="small"
+                            style={{ ...theme.primaryButton, paddingInline: 16 }}
+                            loading={bulkAssignMutation.isPending}
+                            onClick={() =>
+                              bulkAssignMutation.mutate(
+                                unassignedQuery
+                                  .data!.data.filter(tc => !(tc as any).testCaseFileId)
+                                  .map(tc => tc.id)
+                              )
+                            }
+                          >
+                            Attach All
+                          </Button>
+                          <Button
+                            size="small"
+                            style={{ ...theme.softButton, paddingInline: 16 }}
+                            onClick={() => setShowAttachPrompt(false)}
+                          >
+                            Dismiss
+                          </Button>
+                        </Space>
+                      </>
+                    )}
+                  {unassignedQuery.data &&
+                    unassignedQuery.data.data.filter(tc => !(tc as any).testCaseFileId).length === 0 &&
+                    !unassignedQuery.isLoading &&
+                    "No unattached test cases in this project."}
+                </div>
+              </div>
             }
-            message.success('Uploaded');
-            setFileList([]);
-            try {
-              const list = await api.get(`/test-cases/${artifactModal.testCase!.id}/artifacts`);
-              setArtifactList(list.data.data);
-              qc.invalidateQueries({ queryKey: ['test-cases'] });
-            } catch { /* ignore */ }
-          } catch (e: any) {
-            message.error(e.response?.data?.error?.message || 'Upload failed');
-          } finally {
-            setUploadingArtifacts(false);
-          }
-        }}>Upload Selected</Button>
-        {fileList.length > 0 && <Button disabled={uploadingArtifacts} onClick={() => setFileList([])}>Clear</Button>}
-      </div>
-      <p style={{ marginTop: 8, fontSize: 12, color: '#555' }}>Preview below before saving. Accepted: images (png,jpg,webp) & video (mp4,webm).</p>
-      {fileList.length > 0 && <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-        {fileList.map(f => {
-          const file: File | undefined = f.originFileObj;
-          let url: string | undefined;
-          if (file) {
-            try { url = (f.previewUrl ||= URL.createObjectURL(file)); } catch { /* ignore */ }
-          }
-          const mime = file?.type || '';
-          return <div key={f.uid} style={{ width: 130, border: '1px solid #eee', padding: 6, borderRadius: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div style={{ width: '100%', height: 80, background: '#fafafa', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: 4 }}>
-              {url && mime.startsWith('image') && <img src={url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-              {url && mime.startsWith('video') && <video src={url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted />}
-              {!url && <span style={{ fontSize: 11 }}>No preview</span>}
+          />
+        )}
+        <div style={theme.tableContainer}>
+          <Table
+            size="small"
+            sticky
+            rowKey="id"
+            loading={isLoading}
+            dataSource={data?.data || []}
+            columns={columns as any}
+            pagination={false}
+            scroll={{ x: 1600 }}
+            style={theme.table}
+          />
+        </div>
+        <Modal
+          open={open}
+          onCancel={() => setOpen(false)}
+          onOk={() => form.submit()}
+          title={editing ? "Edit Test Case" : "New Test Case"}
+          destroyOnHidden
+          style={theme.modal}
+          bodyStyle={{
+            ...theme.modalBody,
+            maxHeight: "60vh",
+            overflow: "auto",
+            paddingInline: 24,
+            paddingBottom: 24
+          }}
+          okButtonProps={{ style: theme.primaryButton }}
+        >
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={(v) => saveMutation.mutate(v)}
+            initialValues={{ testCaseIdCode: "", projectId: activeFile?.projectId, testCaseFileId: activeFile?.id }}
+            style={{ color: "#e2e8f0" }}
+          >
+            <Form.Item name="projectId" label="Project" rules={[{ required: true }]}>
+              <Select
+                disabled={!!activeFile}
+                options={(projects.data?.data || []).map(p => ({ value: p.id, label: p.code }))}
+                loading={projects.isLoading}
+                showSearch
+                optionFilterProp="label"
+              />
+            </Form.Item>
+            <Form.Item name="testCaseFileId" label="Test Case File Id">
+              <Input disabled value={activeFile?.id} />
+            </Form.Item>
+            <Form.Item label="Test Case File Name">
+              <Input disabled value={activeFile?.name} />
+            </Form.Item>
+            <Form.Item name="testCaseIdCode" label="Test Case ID" rules={[{ required: true }]}>
+              <Input />
+            </Form.Item>
+            <Form.Item name="category" label="Category">
+              <Input />
+            </Form.Item>
+            <Form.Item name="featureName" label="Feature">
+              <Input />
+            </Form.Item>
+            <Form.Item name="description" label="Description">
+              <Input.TextArea rows={3} />
+            </Form.Item>
+            <Form.Item name="subFunctionality" label="Sub Functionality">
+              <Input />
+            </Form.Item>
+            <Form.Item name="preRequisite" label="Pre-requisite">
+              <Input />
+            </Form.Item>
+            <Form.Item name="inputData" label="Input Data (JSON)">
+              <Input.TextArea rows={2} />
+            </Form.Item>
+            <Form.Item name="expectedResult" label="Expected Result">
+              <Input.TextArea rows={2} />
+            </Form.Item>
+            <Form.Item name="severity" label="Severity">
+              <Select options={(severity.data?.data || []).map(l => ({ value: l.code, label: l.code }))} loading={severity.isLoading} allowClear />
+            </Form.Item>
+            <Form.Item name="complexity" label="Complexity">
+              <Select options={(complexity.data?.data || []).map(l => ({ value: l.code, label: l.code }))} loading={complexity.isLoading} allowClear />
+            </Form.Item>
+            <Form.Item name="actualResult" label="Actual Result">
+              <Input.TextArea rows={2} />
+            </Form.Item>
+            <Form.Item name="status" label="Status">
+              <Select options={['Pass','Fail','On_Hold','Not_Applicable','Cannot_be_Executed','Blocked'].map(v => ({ value: v, label: v }))} allowClear />
+            </Form.Item>
+            <Form.Item name="defectIdRef" label="Defect ID / Description">
+              <Input />
+            </Form.Item>
+            <Form.Item name="comments" label="Comments">
+              <Input.TextArea rows={2} />
+            </Form.Item>
+            <Form.Item name="labels" label="Labels (CSV)">
+              <Input />
+            </Form.Item>
+          </Form>
+        </Modal>
+        <Modal
+          open={importOpen}
+          title="Import Test Cases"
+          onCancel={() => {
+            setImportOpen(false);
+            setImportResult(null);
+          }}
+          onOk={() => {
+            setImportOpen(false);
+            setImportResult(null);
+          }}
+          okText="Close"
+          destroyOnHidden
+          style={theme.modal}
+          bodyStyle={{ ...theme.modalBody, paddingInline: 24, color: "#e2e8f0" }}
+          okButtonProps={{ style: theme.primaryButton }}
+        >
+          <Upload beforeUpload={() => false} maxCount={1} onChange={({ fileList }) => setFileList(fileList)} fileList={fileList} accept=".xlsx,.csv">
+            <Button icon={<UploadOutlined />}>Select File</Button>
+          </Upload>
+          <div style={{ marginTop: 8, fontSize: 12, lineHeight: 1.5, color: "#cbd5f5" }}>
+            Template columns now include: <code>projectId</code>, <code>testCaseIdCode</code>, <code>testCaseFileId</code>, <code>testCaseFileName</code>, plus existing fields. You may supply either testCaseFileId or testCaseFileName (scoped by project). If this modal was opened while a file is selected, leaving both blank will still attach via the active file.
+          </div>
+          <Button
+            disabled={!fileList.length}
+            loading={importing}
+            style={{ ...theme.primaryButton, marginTop: 12 }}
+            onClick={async () => {
+              if (!fileList.length) return;
+              setImporting(true);
+              try {
+                const fd = new FormData();
+                fd.append('file', fileList[0].originFileObj);
+                const res = await api.post('/test-cases/import/xlsx', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                setImportResult(res.data.data);
+                message.success('Import complete');
+                qc.invalidateQueries({ queryKey: ['test-cases'] });
+              } catch (e: any) {
+                message.error(e.response?.data?.error?.message || 'Import failed');
+              } finally {
+                setImporting(false);
+              }
+            }}
+          >
+            Upload & Process
+          </Button>
+          {importResult && (
+            <div style={{ marginTop: 16 }}>
+              <strong>Summary:</strong>
+              <br />
+              Created/Updated: {importResult.summary.created} | Failed: {importResult.summary.failed}
+              {importResult.failed.length > 0 && (
+                <div style={{ maxHeight: 120, overflow: 'auto', marginTop: 8 }}>
+                  {importResult.failed.slice(0, 25).map((f: any, i: number) => (
+                    <div key={i}>Row {f.row}: {f.errors.join(', ')}</div>
+                  ))}
+                  {importResult.failed.length > 25 && <div>... {importResult.failed.length - 25} more</div>}
+                </div>
+              )}
             </div>
-            <div style={{ fontSize: 10, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file?.name}</div>
-            {url && <Button size='small' onClick={() => {
-              // Open a quick view modal using existing artifactPreview logic without server save
-              setArtifactPreview({ open: true, url, type: mime });
-            }}>View</Button>}
-          </div>;
-        })}
-      </div>}
-      <ArtifactList testCaseId={artifactModal.testCase.id} list={artifactList} setList={setArtifactList} />
-      </>}
-    </Modal>
-  <Modal open={artifactPreview.open} onCancel={() => setArtifactPreview({ open: false, url: null, type: null })} footer={null} title='Artifact Preview' width={900} destroyOnHidden>
+          )}
+        </Modal>
+        <Modal
+          open={artifactModal.open}
+          onCancel={() => {
+            setArtifactModal({ open: false, testCase: null });
+            setFileList([]);
+            setArtifactList(null);
+            setUploadingArtifacts(false);
+          }}
+          onOk={() => {
+            setArtifactModal({ open: false, testCase: null });
+            setFileList([]);
+            setArtifactList(null);
+            setUploadingArtifacts(false);
+          }}
+          title={`Artifacts - ${artifactModal.testCase?.testCaseIdCode}`}
+          destroyOnHidden
+          width={760}
+          style={{ ...theme.modal, width: 760 }}
+          bodyStyle={{ ...theme.modalBody, paddingInline: 24, color: "#e2e8f0" }}
+          okButtonProps={{ style: theme.primaryButton }}
+          cancelButtonProps={{ style: theme.softButton }}
+        >
+          {artifactModal.testCase && (
+            <>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+                <Upload
+                  fileList={fileList}
+                  multiple
+                  beforeUpload={() => false}
+                  onChange={({ fileList }) => setFileList(fileList)}
+                  accept="image/*,video/*"
+                >
+                  <Button icon={<UploadOutlined />} style={theme.softButton}>
+                    Select Files
+                  </Button>
+                </Upload>
+                <Button
+                  type="primary"
+                  disabled={!fileList.length || uploadingArtifacts}
+                  loading={uploadingArtifacts}
+                  style={theme.primaryButton}
+                  onClick={async () => {
+                    if (!fileList.length) return;
+                    setUploadingArtifacts(true);
+                    try {
+                      for (const f of fileList) {
+                        if (!f.originFileObj) continue;
+                        const formData = new FormData();
+                        formData.append('file', f.originFileObj as File);
+                        await api.post(`/test-cases/${artifactModal.testCase!.id}/artifacts`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+                      }
+                      message.success('Uploaded');
+                      setFileList([]);
+                      try {
+                        const list = await api.get(`/test-cases/${artifactModal.testCase!.id}/artifacts`);
+                        setArtifactList(list.data.data);
+                        qc.invalidateQueries({ queryKey: ['test-cases'] });
+                      } catch {
+                        /* ignore */
+                      }
+                    } catch (e: any) {
+                      message.error(e.response?.data?.error?.message || 'Upload failed');
+                    } finally {
+                      setUploadingArtifacts(false);
+                    }
+                  }}
+                >
+                  Upload Selected
+                </Button>
+                {fileList.length > 0 && (
+                  <Button style={theme.softButton} disabled={uploadingArtifacts} onClick={() => setFileList([])}>
+                    Clear
+                  </Button>
+                )}
+              </div>
+              <p style={{ marginTop: 8, fontSize: 12, color: "#cbd5f5" }}>
+                Preview below before saving. Accepted: images (png,jpg,webp) & video (mp4,webm).
+              </p>
+              {fileList.length > 0 && (
+                <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 10 }}>
+                  {fileList.map(f => {
+                    const file: File | undefined = f.originFileObj;
+                    let url: string | undefined;
+                    if (file) {
+                      try {
+                        url = (f.previewUrl ||= URL.createObjectURL(file));
+                      } catch {
+                        /* ignore */
+                      }
+                    }
+                    const mime = file?.type || '';
+                    return (
+                      <div
+                        key={f.uid}
+                        style={{
+                          width: 130,
+                          border: '1px solid rgba(148, 163, 184, 0.3)',
+                          padding: 6,
+                          borderRadius: 10,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 4,
+                          background: 'rgba(15, 23, 42, 0.6)'
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: '100%',
+                            height: 80,
+                            background: 'rgba(30, 41, 59, 0.7)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            overflow: 'hidden',
+                            borderRadius: 6
+                          }}
+                        >
+                          {url && mime.startsWith('image') && <img src={url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                          {url && mime.startsWith('video') && <video src={url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted />}
+                          {!url && <span style={{ fontSize: 11 }}>No preview</span>}
+                        </div>
+                        <div style={{ fontSize: 10, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file?.name}</div>
+                        {url && (
+                          <Button
+                            size="small"
+                            style={theme.softButton}
+                            onClick={() => {
+                              setArtifactPreview({ open: true, url, type: mime });
+                            }}
+                          >
+                            View
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <ArtifactList testCaseId={artifactModal.testCase.id} list={artifactList} setList={setArtifactList} />
+            </>
+          )}
+        </Modal>
+        <Modal
+          open={artifactPreview.open}
+          onCancel={() => setArtifactPreview({ open: false, url: null, type: null })}
+          footer={null}
+          title="Artifact Preview"
+          width={900}
+          destroyOnHidden
+          style={{ ...theme.modal, width: 900 }}
+          bodyStyle={{ ...theme.modalBody, paddingInline: 24, paddingBottom: 24, color: "#e2e8f0" }}
+        >
       {(() => {
         const isImage = !!artifactPreview.url && (
           artifactPreview.type?.toLowerCase().startsWith('image') || /\.(png|jpe?g|webp|gif|bmp)$/i.test(artifactPreview.url.split('?')[0] || '')
@@ -560,9 +916,9 @@ const TestCasesPage = () => {
               <Button size='small' onClick={() => applyZoom(1/1.2)} disabled={zoom <= 0.25}>-</Button>
               <Button size='small' onClick={() => applyZoom(1.2)} disabled={zoom >= 8}>+</Button>
               <Button size='small' onClick={resetZoom} disabled={zoom === 1 && pan.x === 0 && pan.y === 0}>Reset</Button>
-              <div style={{ fontSize: 11, color: '#555', lineHeight: '24px' }}>Zoom: {(zoom*100).toFixed(0)}%</div>
-              <div style={{ fontSize: 11, color: '#555', lineHeight: '24px' }}>Pan: {pan.x},{pan.y}</div>
-              <div style={{ fontSize: 11, color: '#888', lineHeight: '24px' }}>Drag to pan · Ctrl+Wheel / +/- to zoom</div>
+              <div style={{ fontSize: 11, color: '#cbd5f5', lineHeight: '24px' }}>Zoom: {(zoom*100).toFixed(0)}%</div>
+              <div style={{ fontSize: 11, color: '#cbd5f5', lineHeight: '24px' }}>Pan: {pan.x},{pan.y}</div>
+              <div style={{ fontSize: 11, color: '#a5b4fc', lineHeight: '24px' }}>Drag to pan · Ctrl+Wheel / +/- to zoom</div>
             </div>
             <div
               ref={zoomContainerRef}
@@ -612,9 +968,9 @@ const TestCasesPage = () => {
         controls
         onError={() => message.error('Video failed to load. Try opening in a new tab.')}
       />}
-      {!artifactPreview.url && <div style={{ fontSize: 12, color: '#666' }}>No artifact selected.</div>}
+      {!artifactPreview.url && <div style={{ fontSize: 12, color: '#cbd5f5' }}>No artifact selected.</div>}
       {artifactPreview.url && <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ fontSize: 11, wordBreak: 'break-all', color: '#555' }}>{artifactPreview.url}</div>
+        <div style={{ fontSize: 11, wordBreak: 'break-all', color: '#cbd5f5' }}>{artifactPreview.url}</div>
         <div style={{ display: 'flex', gap: 8 }}>
           <Button size='small' onClick={() => window.open(artifactPreview.url!, '_blank')}>Open in new tab</Button>
           <Button size='small' onClick={() => {
@@ -627,7 +983,9 @@ const TestCasesPage = () => {
         </div>
       </div>}
     </Modal>
-  </Card></div>;
+      </Card>
+    </div>
+  );
 };
 
 export default TestCasesPage;
