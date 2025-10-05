@@ -326,6 +326,124 @@ const inverseCardHeadStyle: CSSProperties = {
   letterSpacing: 0.2
 };
 
+type GradientCardTheme = {
+  background: string;
+  bodyBackground: string;
+  text: string;
+  head: string;
+  accent: string;
+  shadow: string;
+};
+
+const getGradientCardVisuals = (theme: GradientCardTheme) => ({
+  style: {
+    background: theme.background,
+    border: "none",
+    borderRadius: 28,
+    boxShadow: theme.shadow
+  } satisfies CSSProperties,
+  bodyStyle: {
+    padding: 24,
+    borderRadius: 24,
+    background: theme.bodyBackground,
+    color: theme.text
+  } satisfies CSSProperties,
+  headStyle: {
+    color: theme.head,
+    fontWeight: 600,
+    letterSpacing: 0.25,
+    background: "transparent"
+  } satisfies CSSProperties
+});
+
+const projectInfoTheme: GradientCardTheme = {
+  background: "linear-gradient(135deg, #38bdf8 0%, #818cf8 100%)",
+  bodyBackground: "linear-gradient(135deg, rgba(224, 242, 254, 0.95) 0%, rgba(238, 242, 255, 0.95) 100%)",
+  text: "#0f172a",
+  head: "#1d4ed8",
+  accent: "#1d4ed8",
+  shadow: "0 32px 60px rgba(99, 102, 241, 0.35)"
+};
+
+const defectCardThemes: GradientCardTheme[] = [
+  {
+    background: "linear-gradient(135deg, #fb7185 0%, #f97316 100%)",
+    bodyBackground: "linear-gradient(135deg, rgba(255, 247, 237, 0.94) 0%, rgba(255, 228, 230, 0.94) 100%)",
+    text: "#7c2d12",
+    head: "#be123c",
+    accent: "#be123c",
+    shadow: "0 30px 58px rgba(249, 115, 22, 0.38)"
+  },
+  {
+    background: "linear-gradient(135deg, #0ea5e9 0%, #22d3ee 100%)",
+    bodyBackground: "linear-gradient(135deg, rgba(224, 242, 254, 0.94) 0%, rgba(207, 250, 254, 0.94) 100%)",
+    text: "#0f172a",
+    head: "#0f6ba8",
+    accent: "#0284c7",
+    shadow: "0 30px 58px rgba(14, 165, 233, 0.35)"
+  },
+  {
+    background: "linear-gradient(135deg, #22c55e 0%, #84cc16 100%)",
+    bodyBackground: "linear-gradient(135deg, rgba(220, 252, 231, 0.94) 0%, rgba(236, 253, 245, 0.94) 100%)",
+    text: "#064e3b",
+    head: "#047857",
+    accent: "#047857",
+    shadow: "0 30px 58px rgba(34, 197, 94, 0.32)"
+  },
+  {
+    background: "linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%)",
+    bodyBackground: "linear-gradient(135deg, rgba(253, 242, 248, 0.94) 0%, rgba(237, 233, 254, 0.94) 100%)",
+    text: "#4c1d95",
+    head: "#a21caf",
+    accent: "#a21caf",
+    shadow: "0 30px 58px rgba(168, 85, 247, 0.35)"
+  },
+  {
+    background: "linear-gradient(135deg, #38bdf8 0%, #6366f1 100%)",
+    bodyBackground: "linear-gradient(135deg, rgba(219, 234, 254, 0.94) 0%, rgba(224, 231, 255, 0.94) 100%)",
+    text: "#0f172a",
+    head: "#2563eb",
+    accent: "#2563eb",
+    shadow: "0 30px 58px rgba(99, 102, 241, 0.32)"
+  }
+];
+
+const defectTotalsTheme: GradientCardTheme = {
+  background: "linear-gradient(135deg, #f472b6 0%, #60a5fa 100%)",
+  bodyBackground: "linear-gradient(135deg, rgba(254, 226, 226, 0.94) 0%, rgba(219, 234, 254, 0.94) 100%)",
+  text: "#1f2937",
+  head: "#1d4ed8",
+  accent: "#2563eb",
+  shadow: "0 30px 58px rgba(96, 165, 250, 0.32)"
+};
+
+const testCardThemes: GradientCardTheme[] = [
+  {
+    background: "linear-gradient(135deg, #facc15 0%, #f97316 100%)",
+    bodyBackground: "linear-gradient(135deg, rgba(255, 251, 235, 0.94) 0%, rgba(255, 237, 213, 0.94) 100%)",
+    text: "#78350f",
+    head: "#b45309",
+    accent: "#b45309",
+    shadow: "0 30px 58px rgba(249, 115, 22, 0.32)"
+  },
+  {
+    background: "linear-gradient(135deg, #34d399 0%, #22d3ee 100%)",
+    bodyBackground: "linear-gradient(135deg, rgba(236, 253, 245, 0.94) 0%, rgba(209, 250, 229, 0.94) 100%)",
+    text: "#0f766e",
+    head: "#047857",
+    accent: "#0f766e",
+    shadow: "0 30px 58px rgba(16, 185, 129, 0.32)"
+  },
+  {
+    background: "linear-gradient(135deg, #818cf8 0%, #c084fc 100%)",
+    bodyBackground: "linear-gradient(135deg, rgba(237, 233, 254, 0.94) 0%, rgba(244, 219, 255, 0.94) 100%)",
+    text: "#312e81",
+    head: "#6d28d9",
+    accent: "#6d28d9",
+    shadow: "0 30px 58px rgba(129, 140, 248, 0.34)"
+  }
+];
+
 const buildPieConfig = (data: DistributionItem[]) => ({
   data,
   angleField: "value",
@@ -427,6 +545,17 @@ const DashboardPage = () => {
     [data?.testCaseSummary.severityCounts]
   );
 
+  const projectInfoCardVisuals = useMemo(() => getGradientCardVisuals(projectInfoTheme), []);
+  const defectCardVisuals = useMemo(
+    () => defectCardThemes.map((theme) => getGradientCardVisuals(theme)),
+    []
+  );
+  const defectTotalsVisuals = useMemo(() => getGradientCardVisuals(defectTotalsTheme), []);
+  const testCardVisuals = useMemo(
+    () => testCardThemes.map((theme) => getGradientCardVisuals(theme)),
+    []
+  );
+
   const severityIndexColumns = [
     { title: "Severity", dataIndex: "label", key: "label" },
     { title: "Total", dataIndex: "total", key: "total" },
@@ -520,6 +649,24 @@ const DashboardPage = () => {
         { key: "total", label: "Total Test Cases", value: testCaseSummary.totals.total }
       ]
     : [];
+
+  const statusCardTheme = defectCardThemes[0];
+  const statusCardVisuals = defectCardVisuals[0];
+  const priorityCardTheme = defectCardThemes[1];
+  const priorityCardVisuals = defectCardVisuals[1];
+  const severityCardTheme = defectCardThemes[2];
+  const severityCardVisuals = defectCardVisuals[2];
+  const dsiCardTheme = defectCardThemes[3];
+  const dsiCardVisuals = defectCardVisuals[3];
+  const defectStatusCardTheme = defectCardThemes[4];
+  const defectStatusCardVisuals = defectCardVisuals[4];
+
+  const testSummaryTheme = testCardThemes[0];
+  const testSummaryVisuals = testCardVisuals[0];
+  const testStatusTheme = testCardThemes[1];
+  const testStatusVisuals = testCardVisuals[1];
+  const testSeverityTheme = testCardThemes[2];
+  const testSeverityVisuals = testCardVisuals[2];
 
   const getStatisticPrecision = (card: SummaryCard) => {
     if (card.unit === "%") return 1;
@@ -698,8 +845,8 @@ const DashboardPage = () => {
         <Card
           bordered={false}
           loading={projectInfoLoading}
-          style={glassCardStyle}
-          bodyStyle={{ padding: 24 }}
+          style={projectInfoCardVisuals.style}
+          bodyStyle={projectInfoCardVisuals.bodyStyle}
         >
           {projectItems.length ? (
             <Descriptions bordered column={{ xs: 1, sm: 2, lg: 4 }} size="small">
@@ -732,9 +879,9 @@ const DashboardPage = () => {
               title="Defect count by status"
               bordered={false}
               loading={loading}
-              style={sectionCardStyle}
-              headStyle={cardHeadStyle}
-              bodyStyle={{ padding: 24 }}
+              style={statusCardVisuals.style}
+              headStyle={statusCardVisuals.headStyle}
+              bodyStyle={statusCardVisuals.bodyStyle}
             >
               {defectOverview && defectOverview.statusDistribution.length ? (
                 <Pie {...statusChartConfig} height={260} />
@@ -748,9 +895,9 @@ const DashboardPage = () => {
               title="Defect count by priority"
               bordered={false}
               loading={loading}
-              style={sectionCardStyle}
-              headStyle={cardHeadStyle}
-              bodyStyle={{ padding: 24 }}
+              style={priorityCardVisuals.style}
+              headStyle={priorityCardVisuals.headStyle}
+              bodyStyle={priorityCardVisuals.bodyStyle}
             >
               {defectOverview && defectOverview.priorityDistribution.length ? (
                 <Column {...priorityChartConfig} height={260} />
@@ -764,9 +911,9 @@ const DashboardPage = () => {
               title="Defect count by severity"
               bordered={false}
               loading={loading}
-              style={sectionCardStyle}
-              headStyle={cardHeadStyle}
-              bodyStyle={{ padding: 24 }}
+              style={severityCardVisuals.style}
+              headStyle={severityCardVisuals.headStyle}
+              bodyStyle={severityCardVisuals.bodyStyle}
             >
               {defectOverview && defectOverview.severityDistribution.length ? (
                 <Column {...severityChartConfig} height={260} />
@@ -783,18 +930,19 @@ const DashboardPage = () => {
               bordered={false}
               title="Derived Severity Index (DSI)"
               loading={loading}
-              style={sectionCardStyle}
-              headStyle={cardHeadStyle}
-              bodyStyle={{ padding: 24 }}
+              style={dsiCardVisuals.style}
+              headStyle={dsiCardVisuals.headStyle}
+              bodyStyle={dsiCardVisuals.bodyStyle}
             >
               {defectOverview ? (
                 <Space direction="vertical" size="middle" style={{ width: "100%" }}>
                   <Statistic
-                    title="Severity Index"
+                    title={<span style={{ color: dsiCardTheme.head }}>Severity Index</span>}
                     value={defectOverview.severityIndex.value}
                     precision={3}
+                    valueStyle={{ color: dsiCardTheme.accent }}
                   />
-                  <Text type="secondary">
+                  <Text style={{ color: dsiCardTheme.text, opacity: 0.78 }}>
                     {defectOverview.severityIndex.interpretation}
                   </Text>
                   <Table
@@ -804,6 +952,7 @@ const DashboardPage = () => {
                     dataSource={severityIndexData.map((item: SeverityBreakdownItem) => ({
                       ...item
                     }))}
+                    style={{ background: "transparent", color: dsiCardTheme.text }}
                   />
                 </Space>
               ) : (
@@ -816,9 +965,9 @@ const DashboardPage = () => {
               bordered={false}
               title="Defects by status"
               loading={loading}
-              style={sectionCardStyle}
-              headStyle={cardHeadStyle}
-              bodyStyle={{ padding: 24 }}
+              style={defectStatusCardVisuals.style}
+              headStyle={defectStatusCardVisuals.headStyle}
+              bodyStyle={defectStatusCardVisuals.bodyStyle}
             >
               {defectOverview ? (
                 <Table
@@ -829,6 +978,7 @@ const DashboardPage = () => {
                     key: row.severityKey,
                     ...row
                   }))}
+                  style={{ background: "transparent", color: defectStatusCardTheme.text }}
                 />
               ) : (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />
@@ -840,30 +990,58 @@ const DashboardPage = () => {
         {defectTotals && (
           <Card
             bordered={false}
-            style={{ ...sectionCardStyle, marginTop: 16 }}
-            bodyStyle={{ padding: 24 }}
+            style={{ ...defectTotalsVisuals.style, marginTop: 16 }}
+            bodyStyle={defectTotalsVisuals.bodyStyle}
           >
             <Row gutter={[16, 16]}>
               <Col xs={24} sm={8}>
-                <Statistic title="Total" value={defectTotals.total} />
+                <Statistic
+                  title={<span style={{ color: defectTotalsTheme.head }}>Total</span>}
+                  value={defectTotals.total}
+                  valueStyle={{ color: defectTotalsTheme.accent }}
+                />
               </Col>
               <Col xs={24} sm={8}>
-                <Statistic title="Open" value={defectTotals.open} />
+                <Statistic
+                  title={<span style={{ color: defectTotalsTheme.head }}>Open</span>}
+                  value={defectTotals.open}
+                  valueStyle={{ color: defectTotalsTheme.accent }}
+                />
               </Col>
               <Col xs={24} sm={8}>
-                <Statistic title="Resolved" value={defectTotals.resolved} />
+                <Statistic
+                  title={<span style={{ color: defectTotalsTheme.head }}>Resolved</span>}
+                  value={defectTotals.resolved}
+                  valueStyle={{ color: defectTotalsTheme.accent }}
+                />
               </Col>
               <Col xs={24} sm={8}>
-                <Statistic title="Reopened" value={defectTotals.reopened} />
+                <Statistic
+                  title={<span style={{ color: defectTotalsTheme.head }}>Reopened</span>}
+                  value={defectTotals.reopened}
+                  valueStyle={{ color: defectTotalsTheme.accent }}
+                />
               </Col>
               <Col xs={24} sm={8}>
-                <Statistic title="In Progress" value={defectTotals.inProgress} />
+                <Statistic
+                  title={<span style={{ color: defectTotalsTheme.head }}>In Progress</span>}
+                  value={defectTotals.inProgress}
+                  valueStyle={{ color: defectTotalsTheme.accent }}
+                />
               </Col>
               <Col xs={24} sm={8}>
-                <Statistic title="Deferred" value={defectTotals.deferred} />
+                <Statistic
+                  title={<span style={{ color: defectTotalsTheme.head }}>Deferred</span>}
+                  value={defectTotals.deferred}
+                  valueStyle={{ color: defectTotalsTheme.accent }}
+                />
               </Col>
               <Col xs={24} sm={8}>
-                <Statistic title="Rejected" value={defectTotals.rejected} />
+                <Statistic
+                  title={<span style={{ color: defectTotalsTheme.head }}>Rejected</span>}
+                  value={defectTotals.rejected}
+                  valueStyle={{ color: defectTotalsTheme.accent }}
+                />
               </Col>
             </Row>
           </Card>
@@ -880,9 +1058,9 @@ const DashboardPage = () => {
               title="Test Cases Summary"
               bordered={false}
               loading={loading}
-              style={sectionCardStyle}
-              headStyle={cardHeadStyle}
-              bodyStyle={{ padding: 24 }}
+              style={testSummaryVisuals.style}
+              headStyle={testSummaryVisuals.headStyle}
+              bodyStyle={testSummaryVisuals.bodyStyle}
             >
               {testCaseSummary ? (
                 <Space direction="vertical" size="middle" style={{ width: "100%" }}>
@@ -916,16 +1094,18 @@ const DashboardPage = () => {
                   <Row gutter={[16, 16]}>
                     <Col xs={24} sm={12}>
                       <Statistic
-                        title="Pass Rate"
+                        title={<span style={{ color: testSummaryTheme.head }}>Pass Rate</span>}
                         value={testCaseSummary.totals.passRate}
                         precision={1}
                         suffix="%"
+                        valueStyle={{ color: testSummaryTheme.accent }}
                       />
                     </Col>
                     <Col xs={24} sm={12}>
                       <Statistic
-                        title="Executed"
+                        title={<span style={{ color: testSummaryTheme.head }}>Executed</span>}
                         value={testCaseSummary.totals.executed}
+                        valueStyle={{ color: testSummaryTheme.accent }}
                       />
                     </Col>
                   </Row>
@@ -937,6 +1117,7 @@ const DashboardPage = () => {
                       { title: "Count", dataIndex: "value", key: "value" }
                     ]}
                     dataSource={statusSummaryRows}
+                    style={{ background: "transparent", color: testSummaryTheme.text }}
                   />
                 </Space>
               ) : (
@@ -951,9 +1132,9 @@ const DashboardPage = () => {
                 title="Test Cases by status"
                 bordered={false}
                 loading={loading}
-                style={sectionCardStyle}
-                headStyle={cardHeadStyle}
-                bodyStyle={{ padding: 24 }}
+                style={testStatusVisuals.style}
+                headStyle={testStatusVisuals.headStyle}
+                bodyStyle={testStatusVisuals.bodyStyle}
               >
                 {testCaseSummary && testCaseSummary.statusCounts.length ? (
                   <Column {...testCaseStatusConfig} height={260} />
@@ -965,9 +1146,9 @@ const DashboardPage = () => {
                 title="Test Cases by severity"
                 bordered={false}
                 loading={loading}
-                style={sectionCardStyle}
-                headStyle={cardHeadStyle}
-                bodyStyle={{ padding: 24 }}
+                style={testSeverityVisuals.style}
+                headStyle={testSeverityVisuals.headStyle}
+                bodyStyle={testSeverityVisuals.bodyStyle}
               >
                 {testCaseSummary && testCaseSummary.severityCounts.length ? (
                   <Pie {...testCaseSeverityConfig} height={260} />

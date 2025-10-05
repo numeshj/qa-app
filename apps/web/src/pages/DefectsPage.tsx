@@ -155,70 +155,66 @@ const DefectsPage = () => {
   const [importResult, setImportResult] = useState<any | null>(null);
   const [importFiles, setImportFiles] = useState<UploadFile<any>[]>([]);
 
-  useEffect(() => {
-    if (defectModal.open) {
-      if (defectModal.editing) {
-        const record = defectModal.editing as any;
-        const testDataValue =
-          record.testData === null || typeof record.testData === 'undefined'
-            ? undefined
-            : typeof record.testData === 'object'
-              ? JSON.stringify(record.testData, null, 2)
-              : String(record.testData);
-        defectForm.setFieldsValue({
-          projectId: record.projectId,
-          defectFileId: record.defectFileId ?? activeFile?.id,
-          defectIdCode: record.defectIdCode,
-          title: record.title,
-          module: record.module ?? undefined,
-          status: record.status ?? undefined,
-          severity: record.severity ?? undefined,
-          priority: record.priority ?? undefined,
-          description: record.description ?? undefined,
-          testData: testDataValue,
-          actualResults: record.actualResults ?? undefined,
-          expectedResults: record.expectedResults ?? undefined,
-          release: record.release ?? undefined,
-          environment: record.environment ?? undefined,
-          rcaStatus: record.rcaStatus ?? undefined,
-          labels: record.labels ?? undefined,
-          comments: record.comments ?? undefined,
-          triageComments: record.triageComments ?? undefined,
-          assignedToId: record.assignedToId ?? undefined,
-          reportedById: record.reportedById ?? undefined,
-          deliveryDate: record.deliveryDate ? dayjs(record.deliveryDate) : undefined,
-          reportedDate: record.reportedDate ? dayjs(record.reportedDate) : undefined,
-          closedDate: record.closedDate ? dayjs(record.closedDate) : undefined
-        });
-      } else {
-        defectForm.resetFields();
-        const defaultProjectId = activeFile?.projectId ?? projectFilter ?? undefined;
-        const defaultDefectFileId = activeFile?.id ?? selectedFileId ?? undefined;
-        defectForm.setFieldsValue({
-          projectId: defaultProjectId,
-          defectFileId: defaultDefectFileId
-        });
-      }
+  const populateDefectForm = () => {
+    defectForm.resetFields();
+    if (defectModal.editing) {
+      const record = defectModal.editing as any;
+      const testDataValue =
+        record.testData === null || typeof record.testData === 'undefined'
+          ? undefined
+          : typeof record.testData === 'object'
+            ? JSON.stringify(record.testData, null, 2)
+            : String(record.testData);
+      defectForm.setFieldsValue({
+        projectId: record.projectId,
+        defectFileId: record.defectFileId ?? activeFile?.id,
+        defectIdCode: record.defectIdCode,
+        title: record.title,
+        module: record.module ?? undefined,
+        status: record.status ?? undefined,
+        severity: record.severity ?? undefined,
+        priority: record.priority ?? undefined,
+        description: record.description ?? undefined,
+        testData: testDataValue,
+        actualResults: record.actualResults ?? undefined,
+        expectedResults: record.expectedResults ?? undefined,
+        release: record.release ?? undefined,
+        environment: record.environment ?? undefined,
+        rcaStatus: record.rcaStatus ?? undefined,
+        labels: record.labels ?? undefined,
+        comments: record.comments ?? undefined,
+        triageComments: record.triageComments ?? undefined,
+        assignedToId: record.assignedToId ?? undefined,
+        reportedById: record.reportedById ?? undefined,
+        deliveryDate: record.deliveryDate ? dayjs(record.deliveryDate) : undefined,
+        reportedDate: record.reportedDate ? dayjs(record.reportedDate) : undefined,
+        closedDate: record.closedDate ? dayjs(record.closedDate) : undefined
+      });
+    } else {
+      const defaultProjectId = activeFile?.projectId ?? projectFilter ?? undefined;
+      const defaultDefectFileId = activeFile?.id ?? selectedFileId ?? undefined;
+      defectForm.setFieldsValue({
+        projectId: defaultProjectId,
+        defectFileId: defaultDefectFileId
+      });
     }
-  }, [defectModal, defectForm, activeFile, projectFilter, selectedFileId]);
+  };
 
-  useEffect(() => {
-    if (fileModal.open) {
-      if (fileModal.editing) {
-        fileForm.setFieldsValue({
-          projectId: fileModal.editing.projectId,
-          name: fileModal.editing.name,
-          version: fileModal.editing.version ?? undefined,
-          environment: fileModal.editing.environment ?? undefined,
-          releaseBuild: fileModal.editing.releaseBuild ?? undefined,
-          refer: fileModal.editing.refer ?? undefined
-        });
-      } else {
-        fileForm.resetFields();
-        if (projectFilter) fileForm.setFieldsValue({ projectId: projectFilter });
-      }
+  const populateFileForm = () => {
+    fileForm.resetFields();
+    if (fileModal.editing) {
+      fileForm.setFieldsValue({
+        projectId: fileModal.editing.projectId,
+        name: fileModal.editing.name,
+        version: fileModal.editing.version ?? undefined,
+        environment: fileModal.editing.environment ?? undefined,
+        releaseBuild: fileModal.editing.releaseBuild ?? undefined,
+        refer: fileModal.editing.refer ?? undefined
+      });
+    } else {
+      if (projectFilter) fileForm.setFieldsValue({ projectId: projectFilter });
     }
-  }, [fileModal, fileForm, projectFilter]);
+  };
 
   const saveFile = useMutation({
     mutationFn: async (payload: any) => {
@@ -667,7 +663,14 @@ const DefectsPage = () => {
         onCancel={() => setDefectModal({ open: false, editing: null })}
         onOk={handleDefectSubmit}
         confirmLoading={saveDefect.isPending}
-  destroyOnHidden
+        destroyOnClose
+        afterOpenChange={(nextOpen) => {
+          if (nextOpen) {
+            populateDefectForm();
+          } else {
+            defectForm.resetFields();
+          }
+        }}
         width={640}
       >
         <Form layout="vertical" form={defectForm} preserve={false}>
@@ -770,7 +773,14 @@ const DefectsPage = () => {
         onCancel={() => setFileModal({ open: false, editing: null })}
         onOk={handleFileSubmit}
         confirmLoading={saveFile.isPending}
-  destroyOnHidden
+        destroyOnClose
+        afterOpenChange={(nextOpen) => {
+          if (nextOpen) {
+            populateFileForm();
+          } else {
+            fileForm.resetFields();
+          }
+        }}
       >
         <Form layout="vertical" form={fileForm} preserve={false}>
           <Form.Item name="projectId" label="Project" rules={[{ required: true, message: 'Project is required' }]}>
