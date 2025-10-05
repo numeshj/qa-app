@@ -56,6 +56,7 @@ interface Defect {
   severity?: string | null;
   priority?: string | null;
   projectId: number;
+  projectCode?: string | null;
   defectFileId?: number | null;
   defectFileName?: string | null;
   projectName?: string | null;
@@ -95,6 +96,11 @@ const DefectsPage = () => {
     queryFn: async () => (await api.get('/projects')).data
   });
   const projects = projectQuery?.data ?? [];
+  const projectMap = useMemo(() => {
+    const map = new Map<number, Project>();
+    projects.forEach((p) => map.set(p.id, p));
+    return map;
+  }, [projects]);
 
   const {
     data: fileQuery,
@@ -186,13 +192,15 @@ const DefectsPage = () => {
         });
       } else {
         defectForm.resetFields();
+        const defaultProjectId = activeFile?.projectId ?? projectFilter ?? undefined;
+        const defaultDefectFileId = activeFile?.id ?? selectedFileId ?? undefined;
         defectForm.setFieldsValue({
-          projectId: activeFile?.projectId,
-          defectFileId: activeFile?.id
+          projectId: defaultProjectId,
+          defectFileId: defaultDefectFileId
         });
       }
     }
-  }, [defectModal, defectForm, activeFile]);
+  }, [defectModal, defectForm, activeFile, projectFilter, selectedFileId]);
 
   useEffect(() => {
     if (fileModal.open) {
@@ -286,10 +294,32 @@ const DefectsPage = () => {
   const renderDateCell = (value?: string | null) => (value ? dayjs(value).format('YYYY-MM-DD') : '-');
 
   const columns: ColumnsType<Defect> = [
+    { title: 'Project ID', dataIndex: 'projectId', key: 'projectId', width: 110, render: (value) => (value ? <span>{value}</span> : '-') },
+    {
+      title: 'Project Code',
+      dataIndex: 'projectCode',
+      key: 'projectCode',
+      width: 150,
+      render: (_value, record) => {
+        const code = projectMap.get(record.projectId)?.code ?? record.projectCode ?? null;
+        return renderTextCell(code);
+      }
+    },
+    {
+      title: 'Project Name',
+      dataIndex: 'projectName',
+      key: 'projectName',
+      width: 200,
+      render: (_value, record) => {
+        const name = record.projectName ?? projectMap.get(record.projectId)?.name ?? null;
+        return renderTextCell(name);
+      }
+    },
+    { title: 'Defect File ID', dataIndex: 'defectFileId', key: 'defectFileId', width: 130, render: (value) => (value ? <span>{value}</span> : '-') },
+  { title: 'Defect File Name', dataIndex: 'defectFileName', key: 'defectFileName', width: 200, render: (value) => renderTextCell(value) },
     { title: 'Defect ID', dataIndex: 'defectIdCode', key: 'defectIdCode', width: 140, render: (value) => renderTextCell(value) },
     { title: 'Title', dataIndex: 'title', key: 'title', width: 200, render: (value) => renderTextCell(value) },
     { title: 'Module', dataIndex: 'module', key: 'module', width: 160, render: (value) => renderTextCell(value) },
-    { title: 'Defect File', dataIndex: 'defectFileName', key: 'defectFileName', width: 180, render: (value) => renderTextCell(value) },
     {
       title: 'Severity',
       dataIndex: 'severity',
