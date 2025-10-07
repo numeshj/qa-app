@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import {
@@ -17,7 +17,9 @@ import {
   Tag,
   Typography,
   Upload,
-  message
+  message,
+  Spin,
+  Empty
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
@@ -80,13 +82,38 @@ interface Defect {
   closedDate?: string | null;
   updatedAt: string;
   createdAt: string;
+  latestArtifact?: DefectArtifact | null;
+}
+
+interface DefectArtifact {
+  id: number;
+  defectId: number;
+  filePath: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  type: string;
+  createdAt: string;
 }
 
 const statusOptions = ['open', 'in_progress', 'resolved', 'closed', 'on_hold'];
 const severityOptions = ['Critical', 'High', 'Medium', 'Low'];
 const priorityOptions = ['P0', 'P1', 'P2', 'P3'];
 
+const formatBytes = (size?: number | null) => {
+  if (!size || size <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const index = Math.min(Math.floor(Math.log(size) / Math.log(1024)), units.length - 1);
+  const value = size / Math.pow(1024, index);
+  return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${units[index]}`;
+};
+
 const DefectsPage = () => {
+  const buildArtifactUrl = (filePath: string) => {
+    const base = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+    const cleaned = filePath.replace(/\\/g, '/').replace(/^uploads\//, '').replace(/^\.\//, '');
+    return `${base}/files/${cleaned}`;
+  };
   const qc = useQueryClient();
   const [projectFilter, setProjectFilter] = useState<number | undefined>();
   const [selectedFileId, setSelectedFileId] = useState<number | undefined>();
@@ -154,6 +181,170 @@ const DefectsPage = () => {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<any | null>(null);
   const [importFiles, setImportFiles] = useState<UploadFile<any>[]>([]);
+  const [artifactModal, setArtifactModal] = useState<{ open: boolean; defect: Defect | null }>({ open: false, defect: null });
+  const [artifactFileList, setArtifactFileList] = useState<UploadFile<any>[]>([]);
+  const [artifactList, setArtifactList] = useState<DefectArtifact[] | null>(null);
+  const [artifactLoading, setArtifactLoading] = useState(false);
+  const [artifactUploading, setArtifactUploading] = useState(false);
+  const [artifactPreview, setArtifactPreview] = useState<{ open: boolean; url: string | null; type: string | null }>({ open: false, url: null, type: null });
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [panning, setPanning] = useState(false);
+  const [panOrigin, setPanOrigin] = useState<{ x: number; y: number } | null>(null);
+  const zoomContainerRef = useRef<HTMLDivElement | null>(null);
+  const previewMime = (artifactPreview.type ?? '').toLowerCase();
+  const isPreviewVideo = previewMime.startsWith('video');
+  const isPreviewImage = previewMime.startsWith('image');
+
+  const resetZoom = useCallback(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    setPanOrigin(null);
+    setPanning(false);
+  }, []);
+
+  const applyZoom = useCallback(
+    (delta: number, anchor?: { x: number; y: number; container: HTMLDivElement }) => {
+      setZoom((current) => {
+        const next = Math.min(8, Math.max(0.25, parseFloat((current * delta).toFixed(3))));
+        if (!anchor || next === current) return next;
+        const rect = anchor.container.getBoundingClientRect();
+        const cx = anchor.x - rect.left - rect.width / 2 - pan.x;
+        const cy = anchor.y - rect.top - rect.height / 2 - pan.y;
+        const ratio = next / current;
+        setPan((prev) => ({
+          x: prev.x - cx * (ratio - 1),
+          y: prev.y - cy * (ratio - 1)
+        }));
+        return next;
+      });
+    },
+    [pan.x, pan.y]
+  );
+
+  const startPan = (event: React.MouseEvent<HTMLDivElement>) => {
+    setPanning(true);
+    setPanOrigin({ x: event.clientX - pan.x, y: event.clientY - pan.y });
+  };
+
+  const duringPan = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!panning || !panOrigin) return;
+    setPan({ x: event.clientX - panOrigin.x, y: event.clientY - panOrigin.y });
+  };
+
+  const endPan = () => {
+    setPanning(false);
+    setPanOrigin(null);
+  };
+
+  const revokePreviewUrls = (files: UploadFile<any>[]) => {
+    files.forEach((file) => {
+      const preview = (file as UploadFile & { preview?: string }).preview;
+      if (preview) {
+        URL.revokeObjectURL(preview);
+      }
+    });
+  };
+
+  const openArtifacts = (defect: Defect) => {
+    setArtifactFileList([]);
+    setArtifactList(null);
+    setArtifactPreview({ open: false, url: null, type: null });
+    setArtifactModal({ open: true, defect });
+  };
+
+  const closeArtifacts = () => {
+    setArtifactModal({ open: false, defect: null });
+    revokePreviewUrls(artifactFileList);
+    setArtifactFileList([]);
+    setArtifactList(null);
+    setArtifactLoading(false);
+    setArtifactUploading(false);
+    setArtifactPreview({ open: false, url: null, type: null });
+  };
+
+  const fetchArtifacts = async (defectId: number, notifyError = true) => {
+    setArtifactLoading(true);
+    try {
+      const res = await api.get<ApiResponse<DefectArtifact[]>>(`/defects/${defectId}/artifacts`);
+      setArtifactList(res.data.data ?? []);
+    } catch (err: any) {
+      if (notifyError) {
+        message.error(err?.response?.data?.error?.message || 'Failed to load artifacts');
+      }
+      setArtifactList([]);
+    } finally {
+      setArtifactLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!artifactModal.open || !artifactModal.defect) return;
+    setArtifactList(null);
+    fetchArtifacts(artifactModal.defect.id, true);
+  }, [artifactModal.open, artifactModal.defect?.id]);
+
+  useEffect(() => {
+    if (!artifactPreview.open) {
+      resetZoom();
+    }
+  }, [artifactPreview.open, resetZoom]);
+
+  useEffect(() => {
+    const container = zoomContainerRef.current;
+    if (!container || !artifactPreview.open) return;
+    const handler = (event: WheelEvent) => {
+      event.preventDefault();
+      const factor = event.deltaY < 0 ? 1.08 : 1 / 1.08;
+      applyZoom(factor, { x: event.clientX, y: event.clientY, container });
+    };
+    container.addEventListener('wheel', handler, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', handler);
+    };
+  }, [artifactPreview.open, applyZoom]);
+
+  const handleArtifactUpload = async () => {
+    if (!artifactModal.defect || !artifactFileList.length) return;
+    setArtifactUploading(true);
+    try {
+      for (const file of artifactFileList) {
+        if (!file.originFileObj) continue;
+        const formData = new FormData();
+        formData.append('file', file.originFileObj as File);
+        await api.post(`/defects/${artifactModal.defect.id}/artifacts`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      }
+      message.success('Artifacts uploaded');
+      revokePreviewUrls(artifactFileList);
+      setArtifactFileList([]);
+      await fetchArtifacts(artifactModal.defect.id, false);
+      qc.invalidateQueries({ queryKey: ['defects'] });
+    } catch (err: any) {
+      message.error(err?.response?.data?.error?.message || 'Failed to upload artifacts');
+    } finally {
+      setArtifactUploading(false);
+    }
+  };
+
+  const handleArtifactDelete = async (artifactId: number) => {
+    if (!artifactModal.defect) return;
+    try {
+      await api.delete(`/defects/${artifactModal.defect.id}/artifacts/${artifactId}`);
+      message.success('Artifact deleted');
+      await fetchArtifacts(artifactModal.defect.id, false);
+      qc.invalidateQueries({ queryKey: ['defects'] });
+    } catch (err: any) {
+      message.error(err?.response?.data?.error?.message || 'Failed to delete artifact');
+    }
+  };
+
+  const handleArtifactPreview = (artifact: DefectArtifact) => {
+    resetZoom();
+    const url = buildArtifactUrl(artifact.filePath);
+    setArtifactPreview({ open: true, url, type: artifact.mimeType || artifact.type || null });
+  };
 
   const populateDefectForm = () => {
     defectForm.resetFields();
@@ -360,14 +551,47 @@ const DefectsPage = () => {
       render: (value) => (value ? dayjs(value).fromNow() : '-')
     },
     {
+      title: 'Artifacts',
+      key: 'artifacts',
+      width: 220,
+      render: (_value, record) => {
+        const count = record.artifactCount ?? 0;
+        const latest = record.latestArtifact;
+        return (
+          <Space direction="vertical" size={0}>
+            <Space size="small">
+              <Tag color={count > 0 ? 'geekblue' : undefined} style={{ marginRight: 0 }}>
+                {count} {count === 1 ? 'file' : 'files'}
+              </Tag>
+              {latest ? (
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  Latest {dayjs(latest.createdAt).fromNow()}
+                </Typography.Text>
+              ) : (
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  None uploaded
+                </Typography.Text>
+              )}
+            </Space>
+            <Button type="link" size="small" onClick={() => openArtifacts(record)}>
+              Manage
+            </Button>
+          </Space>
+        );
+      }
+    },
+    {
       title: 'Actions',
       key: 'actions',
       fixed: 'right',
-      width: 180,
+      width: 200,
       render: (_, record) => (
         <Space>
           <Button type="link" onClick={() => setDefectModal({ open: true, editing: record })}>
             Edit
+          </Button>
+          <Button type="link" onClick={() => openArtifacts(record)}>
+            Artifacts
           </Button>
           <Popconfirm
             title="Delete defect"
@@ -553,9 +777,315 @@ const DefectsPage = () => {
           dataSource={defects}
           columns={columns}
           pagination={{ pageSize: 10 }}
-          scroll={{ x: 2600 }}
+          scroll={{ x: 2800 }}
         />
       </Card>
+
+      <Modal
+        title={`Artifacts${artifactModal.defect ? ` · ${artifactModal.defect.defectIdCode}` : ''}`}
+        open={artifactModal.open}
+        onCancel={closeArtifacts}
+        onOk={closeArtifacts}
+        okText="Close"
+        destroyOnClose
+        width={780}
+      >
+        {artifactModal.defect && (
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <Typography.Text type="secondary">
+              Upload screenshots or recordings that reproduce the defect.
+            </Typography.Text>
+            <Space wrap>
+              <Upload
+                fileList={artifactFileList}
+                beforeUpload={() => false}
+                multiple
+                accept="image/*,video/*"
+                onChange={({ fileList }) => setArtifactFileList(fileList as UploadFile<any>[])}
+              >
+                <Button icon={<UploadOutlined />}>Select Files</Button>
+              </Upload>
+              <Button
+                type="primary"
+                disabled={!artifactFileList.length}
+                loading={artifactUploading}
+                onClick={handleArtifactUpload}
+              >
+                Upload Selected
+              </Button>
+              {artifactFileList.length > 0 && (
+                <Button
+                  onClick={() => {
+                    revokePreviewUrls(artifactFileList);
+                    setArtifactFileList([]);
+                  }}
+                  disabled={artifactUploading}
+                >
+                  Clear
+                </Button>
+              )}
+            </Space>
+            {artifactFileList.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                {artifactFileList.map((file) => {
+                  const maybeFile = file.originFileObj as File | undefined;
+                  let preview: string | undefined = (file as UploadFile & { preview?: string }).preview;
+                  if (!preview && maybeFile) {
+                    try {
+                      preview = URL.createObjectURL(maybeFile);
+                      (file as UploadFile & { preview?: string }).preview = preview;
+                    } catch {
+                      preview = undefined;
+                    }
+                  }
+                  const mime = maybeFile?.type ?? file.type ?? '';
+                  return (
+                    <div
+                      key={file.uid}
+                      style={{
+                        width: 150,
+                        border: '1px solid #f0f0f0',
+                        borderRadius: 8,
+                        padding: 8,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: '100%',
+                          height: 90,
+                          background: '#fafafa',
+                          borderRadius: 6,
+                          display: 'flex',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          overflow: 'hidden'
+                        }}
+                      >
+                        {preview && mime.startsWith('image') && (
+                          <img src={preview} alt={maybeFile?.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        )}
+                        {preview && mime.startsWith('video') && (
+                          <video src={preview} style={{ width: '100%' }} muted />
+                        )}
+                        {!preview && <Typography.Text type="secondary">No preview</Typography.Text>}
+                      </div>
+                      <Typography.Text style={{ fontSize: 12 }} ellipsis={{ tooltip: maybeFile?.name }}>
+                        {maybeFile?.name || file.name}
+                      </Typography.Text>
+                      {preview && (
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            resetZoom();
+                            setArtifactPreview({ open: true, url: preview!, type: mime });
+                          }}
+                        >
+                          Preview
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div style={{ minHeight: 160, width: '100%' }}>
+              {artifactLoading && (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
+                  <Spin tip="Loading artifacts..." />
+                </div>
+              )}
+              {!artifactLoading && artifactList && artifactList.length === 0 && (
+                <Empty description="No artifacts uploaded" />
+              )}
+              {!artifactLoading && artifactList && artifactList.length > 0 && (
+                <div
+                  style={{
+                    display: 'grid',
+                    gap: 16,
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))'
+                  }}
+                >
+                  {artifactList.map((artifact) => {
+                    const url = buildArtifactUrl(artifact.filePath);
+                    const isImage = (artifact.mimeType || '').toLowerCase().startsWith('image');
+                    const isVideo = (artifact.mimeType || '').toLowerCase().startsWith('video');
+                    return (
+                      <Card
+                        key={artifact.id}
+                        size="small"
+                        cover={
+                          <div
+                            style={{
+                              width: '100%',
+                              height: 140,
+                              background: '#f5f5f5',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              overflow: 'hidden'
+                            }}
+                          >
+                            {isImage && <img src={url} alt={artifact.originalName} style={{ width: '100%', objectFit: 'cover' }} />}
+                            {isVideo && <video src={url} style={{ width: '100%' }} controls={false} muted />}
+                            {!isImage && !isVideo && <Typography.Text type="secondary">{artifact.type}</Typography.Text>}
+                          </div>
+                        }
+                      >
+                        <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                          <Typography.Text ellipsis={{ tooltip: artifact.originalName }}>{artifact.originalName}</Typography.Text>
+                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                            {formatBytes(artifact.sizeBytes)} · {dayjs(artifact.createdAt).fromNow()}
+                          </Typography.Text>
+                          <Space size="small">
+                            <Button type="link" size="small" onClick={() => handleArtifactPreview(artifact)}>
+                              View
+                            </Button>
+                            <Button
+                              type="link"
+                              size="small"
+                              onClick={() => window.open(url, '_blank', 'noopener')}
+                            >
+                              Open
+                            </Button>
+                            <Popconfirm
+                              title="Delete artifact"
+                              description="Remove this artifact?"
+                              onConfirm={() => handleArtifactDelete(artifact.id)}
+                            >
+                              <Button type="link" danger size="small">
+                                Delete
+                              </Button>
+                            </Popconfirm>
+                          </Space>
+                        </Space>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </Space>
+        )}
+      </Modal>
+
+      <Modal
+        title="Artifact Preview"
+        open={artifactPreview.open}
+        onCancel={() => setArtifactPreview({ open: false, url: null, type: null })}
+        footer={null}
+        width={isPreviewVideo ? 900 : 820}
+        destroyOnClose
+      >
+        {artifactPreview.url ? (
+          <>
+            {isPreviewImage && (
+              <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                <Space size="small" wrap>
+                  <Button size="small" onClick={() => applyZoom(1 / 1.2)} disabled={zoom <= 0.25}>
+                    Zoom -
+                  </Button>
+                  <Button size="small" onClick={() => applyZoom(1.2)} disabled={zoom >= 8}>
+                    Zoom +
+                  </Button>
+                  <Button size="small" onClick={resetZoom} disabled={zoom === 1 && pan.x === 0 && pan.y === 0}>
+                    Reset
+                  </Button>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    Zoom: {(zoom * 100).toFixed(0)}% · Pan: {Math.round(pan.x)}, {Math.round(pan.y)}
+                  </Typography.Text>
+                </Space>
+                <div
+                  ref={zoomContainerRef}
+                  onMouseDown={startPan}
+                  onMouseMove={duringPan}
+                  onMouseUp={endPan}
+                  onMouseLeave={endPan}
+                  style={{
+                    width: '100%',
+                    height: 480,
+                    border: '1px solid #d9d9d9',
+                    borderRadius: 8,
+                    background: '#111',
+                    overflow: 'hidden',
+                    position: 'relative',
+                    cursor: panning ? 'grabbing' : 'grab'
+                  }}
+                >
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                      transformOrigin: 'center center',
+                      userSelect: 'none',
+                      pointerEvents: 'none'
+                    }}
+                  >
+                    <img
+                      src={artifactPreview.url}
+                      alt="Artifact preview"
+                      draggable={false}
+                      style={{ display: 'block', maxWidth: '100%', maxHeight: '100%' }}
+                      onError={(event) => {
+                        const target = event.currentTarget;
+                        if (!target.dataset.errorShown) {
+                          target.dataset.errorShown = '1';
+                          target.style.display = 'none';
+                          message.warning('Image failed to load. Try opening in a new tab.');
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              </Space>
+            )}
+            {isPreviewVideo && (
+              <video
+                src={artifactPreview.url}
+                style={{ width: '100%', background: '#000', borderRadius: 8 }}
+                controls
+                autoPlay
+                onError={() => message.error('Video failed to load.')}
+              />
+            )}
+            {!isPreviewImage && !isPreviewVideo && (
+              <Space direction="vertical" size="middle" style={{ width: '100%', alignItems: 'center' }}>
+                <Empty description="Preview not available" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                <Button type="primary" onClick={() => window.open(artifactPreview.url!, '_blank', 'noopener')}>
+                  Open in new tab
+                </Button>
+              </Space>
+            )}
+            <Space direction="vertical" size="small" style={{ marginTop: 16, width: '100%' }}>
+              <Typography.Text type="secondary" style={{ fontSize: 12, wordBreak: 'break-all' }}>
+                {artifactPreview.url}
+              </Typography.Text>
+              <Space size="small">
+                <Button size="small" onClick={() => window.open(artifactPreview.url!, '_blank', 'noopener')}>
+                  Open in new tab
+                </Button>
+                <Button
+                  size="small"
+                  onClick={() => {
+                    if (!artifactPreview.url) return;
+                    const current = artifactPreview.url;
+                    setArtifactPreview((prev) => ({ ...prev, url: '' }));
+                    setTimeout(() => setArtifactPreview((prev) => ({ ...prev, url: current })), 0);
+                  }}
+                >
+                  Retry
+                </Button>
+              </Space>
+            </Space>
+          </>
+        ) : (
+          <Empty description="No preview available" />
+        )}
+      </Modal>
 
       <Modal
         title="Import Defects"

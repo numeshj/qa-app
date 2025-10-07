@@ -296,7 +296,7 @@ const pillSpaceStyle: CSSProperties = {
 
 const sectionTitleStyle: CSSProperties = {
   marginBottom: 16,
-  color: "#0f172a",
+  color: "#aac2fcff",
   fontWeight: 700,
   letterSpacing: 0.3
 };
@@ -304,7 +304,7 @@ const sectionTitleStyle: CSSProperties = {
 const sectionCardStyle: CSSProperties = {
   borderRadius: 24,
   border: "none",
-  boxShadow: "0 24px 55px rgba(15, 23, 42, 0.12)"
+  boxShadow: "0 24px 55px rgba(140, 161, 211, 0.12)"
 };
 
 const glassCardStyle: CSSProperties = {
@@ -870,7 +870,7 @@ const DashboardPage = () => {
         <Title level={3} style={sectionTitleStyle}>
           Defect Metrics
         </Title>
-        <Text type="secondary">
+        <Text style={{ color: "#fde68a", fontWeight: 600, letterSpacing: 0.3 }}>
           Update as of {humanizeDate(data?.updatedAt)}
         </Text>
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>

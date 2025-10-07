@@ -18,18 +18,25 @@ const storage = multer.diskStorage({
     try {
       const ext = path.extname(file.originalname).toLowerCase();
       const entity = (req.baseUrl.includes('defects') ? 'defect' : 'testcase');
-      let testCaseCode = 'unknown';
-      if (entity === 'testcase' && req.params?.id) {
-        const tcId = Number(req.params.id);
-        if (!isNaN(tcId)) {
-          const tc = await prisma.testCase.findUnique({ where: { id: tcId }, select: { testCaseIdCode: true, projectId: true } });
-          if (tc) {
-            testCaseCode = `${tc.projectId}_${tc.testCaseIdCode}`.replace(/[^A-Za-z0-9_\-]/g,'_');
+      let code = 'unknown';
+      if (req.params?.id) {
+        const numericId = Number(req.params.id);
+        if (!Number.isNaN(numericId)) {
+          if (entity === 'testcase') {
+            const tc = await prisma.testCase.findUnique({ where: { id: numericId }, select: { testCaseIdCode: true, projectId: true } });
+            if (tc) {
+              code = `${tc.projectId}_${tc.testCaseIdCode}`.replace(/[^A-Za-z0-9_\-]/g, '_');
+            }
+          } else {
+            const defect = await prisma.defect.findUnique({ where: { id: numericId }, select: { defectIdCode: true, projectId: true } });
+            if (defect) {
+              code = `${defect.projectId}_${defect.defectIdCode}`.replace(/[^A-Za-z0-9_\-]/g, '_');
+            }
           }
         }
       }
       const timestamp = Date.now();
-      cb(null, `${entity}_${testCaseCode}_${timestamp}${ext}`);
+      cb(null, `${entity}_${code}_${timestamp}${ext}`);
     } catch {
       cb(null, nanoid() + path.extname(file.originalname));
     }

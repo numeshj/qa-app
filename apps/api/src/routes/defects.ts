@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middlewares/auth';
+import { upload } from '../middlewares/upload';
 import { z } from 'zod';
 import multer from 'multer';
 import { parseSheet, buildTemplate } from '../utils/xlsx';
@@ -117,15 +118,18 @@ const toDate = (value?: string) => {
 };
 
 const shapeResponse = (defect: any) => {
-  const assigned = defect.assignedTo ? `${defect.assignedTo.firstName ?? ''} ${defect.assignedTo.lastName ?? ''}`.trim() : null;
-  const reported = defect.reportedBy ? `${defect.reportedBy.firstName ?? ''} ${defect.reportedBy.lastName ?? ''}`.trim() : null;
+  const { artifacts, ...rest } = defect;
+  const assigned = rest.assignedTo ? `${rest.assignedTo.firstName ?? ''} ${rest.assignedTo.lastName ?? ''}`.trim() : null;
+  const reported = rest.reportedBy ? `${rest.reportedBy.firstName ?? ''} ${rest.reportedBy.lastName ?? ''}`.trim() : null;
+  const latest = artifacts?.[0] || null;
   return {
-    ...defect,
+    ...rest,
     assignedToName: assigned || null,
     reportedByName: reported || null,
-    defectFileName: defect.defectFile?.name ?? null,
-    projectName: defect.project?.name ?? null,
-    artifactCount: defect._count?.artifacts ?? 0
+    defectFileName: rest.defectFile?.name ?? null,
+    projectName: rest.project?.name ?? null,
+    artifactCount: rest._count?.artifacts ?? 0,
+    latestArtifact: latest ? { ...latest, filePath: latest.filePath.replace(/\\/g, '/') } : null
   };
 };
 
@@ -155,7 +159,8 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
       project: { select: { id: true, name: true } },
       assignedTo: { select: { id: true, firstName: true, lastName: true } },
       reportedBy: { select: { id: true, firstName: true, lastName: true } },
-      _count: { select: { artifacts: true } }
+      _count: { select: { artifacts: true } },
+      artifacts: { take: 1, orderBy: { createdAt: 'desc' } }
     }
   });
 
@@ -585,6 +590,73 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
   } catch {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: 'Failed to delete defect' } });
   }
+});
+
+router.post('/:id/artifacts', requireAuth, upload.single('file'), async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (Number.isNaN(id)) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_ID', message: 'Invalid defect id' } });
+  }
+  if (!req.file) {
+    return res.status(400).json({ success: false, error: { code: 'NO_FILE', message: 'File required' } });
+  }
+  try {
+    let relativePath = req.file.path.replace(/\\/g, '/');
+    const match = relativePath.match(/uploads\/(.*)$/);
+    if (match) {
+      relativePath = match[1];
+    }
+    relativePath = relativePath.replace(/^\.\//, '');
+    const artifact = await prisma.defectArtifact.create({
+      data: {
+        defectId: id,
+        type: req.file.mimetype.startsWith('video') ? 'video' : 'image',
+        filePath: relativePath,
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        sizeBytes: req.file.size
+      }
+    });
+    res.status(201).json({ success: true, data: { ...artifact, filePath: relativePath } });
+  } catch (err) {
+    res.status(500).json({ success: false, error: { code: 'UPLOAD_FAILED', message: 'Failed to save artifact' }, debug: process.env.NODE_ENV !== 'production' ? { message: (err as Error).message } : undefined });
+  }
+});
+
+router.get('/:id/artifacts', requireAuth, async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (Number.isNaN(id)) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_ID', message: 'Invalid defect id' } });
+  }
+  const list = await prisma.defectArtifact.findMany({ where: { defectId: id }, orderBy: { createdAt: 'desc' } });
+  res.json({ success: true, data: list.map((a) => ({ ...a, filePath: a.filePath.replace(/\\/g, '/') })) });
+});
+
+router.get('/:id/artifacts/summary', requireAuth, async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (Number.isNaN(id)) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_ID', message: 'Invalid defect id' } });
+  }
+  const [count, latest] = await Promise.all([
+    prisma.defectArtifact.count({ where: { defectId: id } }),
+    prisma.defectArtifact.findFirst({ where: { defectId: id }, orderBy: { createdAt: 'desc' } })
+  ]);
+  const normalizedLatest = latest ? { ...latest, filePath: latest.filePath.replace(/\\/g, '/') } : null;
+  res.json({ success: true, data: { count, latest: normalizedLatest } });
+});
+
+router.delete('/:id/artifacts/:artifactId', requireAuth, async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const artifactId = Number(req.params.artifactId);
+  if (Number.isNaN(id) || Number.isNaN(artifactId)) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_ID', message: 'Invalid identifier' } });
+  }
+  const artifact = await prisma.defectArtifact.findUnique({ where: { id: artifactId } });
+  if (!artifact || artifact.defectId !== id) {
+    return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Artifact not found' } });
+  }
+  await prisma.defectArtifact.delete({ where: { id: artifactId } });
+  res.json({ success: true, data: { deleted: true } });
 });
 
 export default router;
