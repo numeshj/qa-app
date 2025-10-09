@@ -5,7 +5,8 @@ import {
   BugOutlined,
   FolderOutlined,
   ExperimentOutlined,
-  FileSearchOutlined
+  FileSearchOutlined,
+  FlagOutlined
 } from "@ant-design/icons";
 import type { CSSProperties } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -67,7 +68,8 @@ const contentContainerStyle: CSSProperties = {
   boxShadow: "0 24px 45px rgba(15, 23, 42, 0.35)",
   display: "flex",
   flexDirection: "column",
-  overflow: "hidden"
+  overflowX: "hidden",
+  overflowY: "auto"
 };
 
 export const AppShell = () => {
@@ -81,7 +83,8 @@ export const AppShell = () => {
       { key: "/app/projects", icon: <FolderOutlined />, label: <Link to="/app/projects">Projects</Link> },
       { key: "/app/test-cases", icon: <ExperimentOutlined />, label: <Link to="/app/test-cases">Test Cases</Link> },
       { key: "/app/defects", icon: <BugOutlined />, label: <Link to="/app/defects">Defects</Link> },
-      { key: "/app/audit", icon: <FileSearchOutlined />, label: <Link to="/app/audit">Audit</Link> }
+  { key: "/app/audit", icon: <FileSearchOutlined />, label: <Link to="/app/audit">Audit</Link> },
+  { key: "/app/goals", icon: <FlagOutlined />, label: <Link to="/app/goals">Goals</Link> }
     ],
     []
   );

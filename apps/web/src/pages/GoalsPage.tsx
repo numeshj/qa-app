@@ -43,6 +43,7 @@ import advancedFormat from 'dayjs/plugin/advancedFormat';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import weekOfYear from 'dayjs/plugin/weekOfYear';
+import './GoalsPage.css';
 
 import type { SliderMarks } from 'antd/es/slider';
 
@@ -756,8 +757,8 @@ const GoalsPage = () => {
       updateSummary: goal?.updateSummary ?? '',
       changeNotes: goal?.changeNotes ?? '',
       reviewerNotes: goal?.reviewerNotes ?? '',
-      testFiles: goal?.testFiles ?? [],
-      defectFiles: goal?.defectFiles ?? []
+      testFiles: (goal?.testFiles ?? []).map((value) => value.toString()),
+      defectFiles: (goal?.defectFiles ?? []).map((value) => value.toString())
     });
   };
 
@@ -769,8 +770,16 @@ const GoalsPage = () => {
   const handleSaveWeeklyGoal = async () => {
     try {
       const values = await weeklyGoalForm.validateFields();
-      const sanitizeStrings = (input?: string[]) =>
-        Array.isArray(input) ? input.map((item) => item.trim()).filter((item) => item.length > 0) : [];
+      const sanitizeStrings = (input?: string[]) => {
+        if (!Array.isArray(input)) return [];
+        const seen = new Set<string>();
+        input.forEach((item) => {
+          const trimmed = item?.toString().trim();
+          if (!trimmed) return;
+          seen.add(trimmed);
+        });
+        return Array.from(seen);
+      };
       const updateSummary = values.updateSummary?.trim() ?? '';
       const changeNotes = values.changeNotes?.trim() ?? '';
       const reviewerNotes = values.reviewerNotes?.trim() ?? '';
@@ -939,8 +948,8 @@ const GoalsPage = () => {
       notes: entry?.notes ?? '',
       updateSummary: entry?.updateSummary ?? '',
       comment: entry?.comment ?? '',
-      testFiles: entry?.testFiles ?? [],
-      defectFiles: entry?.defectFiles ?? []
+      testFiles: (entry?.testFiles ?? []).map((value) => value.toString()),
+      defectFiles: (entry?.defectFiles ?? []).map((value) => value.toString())
     });
   };
 
@@ -952,8 +961,16 @@ const GoalsPage = () => {
   const handleSaveDailyEntry = async () => {
     try {
       const values = await dailyEntryForm.validateFields();
-      const sanitizeStrings = (input?: string[]) =>
-        Array.isArray(input) ? input.map((item) => item.trim()).filter((item) => item.length > 0) : [];
+      const sanitizeStrings = (input?: string[]) => {
+        if (!Array.isArray(input)) return [];
+        const seen = new Set<string>();
+        input.forEach((item) => {
+          const trimmed = item?.toString().trim();
+          if (!trimmed) return;
+          seen.add(trimmed);
+        });
+        return Array.from(seen);
+      };
       const updateSummary = values.updateSummary?.trim() ?? '';
       const comment = values.comment?.trim() ?? '';
       const testFiles = sanitizeStrings(values.testFiles);
@@ -1395,6 +1412,7 @@ const GoalsPage = () => {
       </Card>
 
       <Tabs
+        rootClassName="goals-tabs"
         activeKey={activeTab}
         onChange={(key) => setActiveTab(key)}
         items={[
@@ -1402,7 +1420,7 @@ const GoalsPage = () => {
             key: 'weekly',
             label: 'Weekly strategy',
             children: (
-              <Space direction="vertical" size={20} style={{ width: '100%' }}>
+              <Space direction="vertical" size={20} style={{ width: '100%' }} className="goals-history-pane">
                 <Card
                   bordered
                   title={<Space> <LineChartOutlined /> <span>Weekly goal board</span> </Space>}
@@ -1479,16 +1497,26 @@ const GoalsPage = () => {
                                 ) : null}
                                 {(goal.testFiles?.length || 0) > 0 || (goal.defectFiles?.length || 0) > 0 ? (
                                   <Space size={4} wrap>
-                                    {(goal.testFiles ?? []).map((file) => (
-                                      <Tag key={`${goal.id}-t-${file}`} color="cyan">
-                                        Test · {file}
-                                      </Tag>
-                                    ))}
-                                    {(goal.defectFiles ?? []).map((file) => (
-                                      <Tag key={`${goal.id}-d-${file}`} color="magenta">
-                                        Defect · {file}
-                                      </Tag>
-                                    ))}
+                                    {(goal.testFiles ?? []).map((file) => {
+                                      const trimmed = file.trim();
+                                      if (!trimmed) return null;
+                                      const label = testCaseFileLabelLookup.get(trimmed) ?? trimmed;
+                                      return (
+                                        <Tag key={`${goal.id}-t-${trimmed}`} color="cyan">
+                                          Test · {label}
+                                        </Tag>
+                                      );
+                                    })}
+                                    {(goal.defectFiles ?? []).map((file) => {
+                                      const trimmed = file.trim();
+                                      if (!trimmed) return null;
+                                      const label = defectFileLabelLookup.get(trimmed) ?? trimmed;
+                                      return (
+                                        <Tag key={`${goal.id}-d-${trimmed}`} color="magenta">
+                                          Defect · {label}
+                                        </Tag>
+                                      );
+                                    })}
                                   </Space>
                                 ) : null}
                               </Space>
@@ -1611,16 +1639,26 @@ const GoalsPage = () => {
                               ) : null}
                               {(goal.testFiles?.length || 0) > 0 || (goal.defectFiles?.length || 0) > 0 ? (
                                 <Space size={4} wrap>
-                                  {(goal.testFiles ?? []).map((file) => (
-                                    <Tag key={`timeline-${goal.id}-t-${file}`} color="cyan">
-                                      Test · {file}
-                                    </Tag>
-                                  ))}
-                                  {(goal.defectFiles ?? []).map((file) => (
-                                    <Tag key={`timeline-${goal.id}-d-${file}`} color="magenta">
-                                      Defect · {file}
-                                    </Tag>
-                                  ))}
+                                  {(goal.testFiles ?? []).map((file) => {
+                                    const trimmed = file.trim();
+                                    if (!trimmed) return null;
+                                    const label = testCaseFileLabelLookup.get(trimmed) ?? trimmed;
+                                    return (
+                                      <Tag key={`timeline-${goal.id}-t-${trimmed}`} color="cyan">
+                                        Test · {label}
+                                      </Tag>
+                                    );
+                                  })}
+                                  {(goal.defectFiles ?? []).map((file) => {
+                                    const trimmed = file.trim();
+                                    if (!trimmed) return null;
+                                    const label = defectFileLabelLookup.get(trimmed) ?? trimmed;
+                                    return (
+                                      <Tag key={`timeline-${goal.id}-d-${trimmed}`} color="magenta">
+                                        Defect · {label}
+                                      </Tag>
+                                    );
+                                  })}
                                 </Space>
                               ) : null}
                             </Space>
@@ -1700,16 +1738,26 @@ const GoalsPage = () => {
                                 ) : null}
                                 {(entry.testFiles?.length || 0) > 0 || (entry.defectFiles?.length || 0) > 0 ? (
                                   <Space size={4} wrap>
-                                    {(entry.testFiles ?? []).map((file) => (
-                                      <Tag key={`${entry.id}-t-${file}`} color="cyan">
-                                        Test · {file}
-                                      </Tag>
-                                    ))}
-                                    {(entry.defectFiles ?? []).map((file) => (
-                                      <Tag key={`${entry.id}-d-${file}`} color="magenta">
-                                        Defect · {file}
-                                      </Tag>
-                                    ))}
+                                    {(entry.testFiles ?? []).map((file) => {
+                                      const trimmed = file.trim();
+                                      if (!trimmed) return null;
+                                      const label = testCaseFileLabelLookup.get(trimmed) ?? trimmed;
+                                      return (
+                                        <Tag key={`${entry.id}-t-${trimmed}`} color="cyan">
+                                          Test · {label}
+                                        </Tag>
+                                      );
+                                    })}
+                                    {(entry.defectFiles ?? []).map((file) => {
+                                      const trimmed = file.trim();
+                                      if (!trimmed) return null;
+                                      const label = defectFileLabelLookup.get(trimmed) ?? trimmed;
+                                      return (
+                                        <Tag key={`${entry.id}-d-${trimmed}`} color="magenta">
+                                          Defect · {label}
+                                        </Tag>
+                                      );
+                                    })}
                                   </Space>
                                 ) : null}
                               </Space>
@@ -1816,16 +1864,26 @@ const GoalsPage = () => {
                               ) : null}
                               {(entry.testFiles?.length || 0) > 0 || (entry.defectFiles?.length || 0) > 0 ? (
                                 <Space size={4} wrap>
-                                  {(entry.testFiles ?? []).map((file) => (
-                                    <Tag key={`daily-timeline-${entry.id}-t-${file}`} color="cyan">
-                                      Test · {file}
-                                    </Tag>
-                                  ))}
-                                  {(entry.defectFiles ?? []).map((file) => (
-                                    <Tag key={`daily-timeline-${entry.id}-d-${file}`} color="magenta">
-                                      Defect · {file}
-                                    </Tag>
-                                  ))}
+                                  {(entry.testFiles ?? []).map((file) => {
+                                    const trimmed = file.trim();
+                                    if (!trimmed) return null;
+                                    const label = testCaseFileLabelLookup.get(trimmed) ?? trimmed;
+                                    return (
+                                      <Tag key={`daily-timeline-${entry.id}-t-${trimmed}`} color="cyan">
+                                        Test · {label}
+                                      </Tag>
+                                    );
+                                  })}
+                                  {(entry.defectFiles ?? []).map((file) => {
+                                    const trimmed = file.trim();
+                                    if (!trimmed) return null;
+                                    const label = defectFileLabelLookup.get(trimmed) ?? trimmed;
+                                    return (
+                                      <Tag key={`daily-timeline-${entry.id}-d-${trimmed}`} color="magenta">
+                                        Defect · {label}
+                                      </Tag>
+                                    );
+                                  })}
                                 </Space>
                               ) : null}
                             </Space>
