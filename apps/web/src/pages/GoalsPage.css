@@ -49,6 +49,93 @@
   border-bottom-color: rgba(148, 163, 184, 0.25);
 }
 
+.goals-tabs .ant-tabs-content-holder {
+  margin-top: 8px;
+}
+
+.goals-tabs .ant-tabs-tabpane {
+  color: #e2e8f0;
+}
+
+.goals-tabs .ant-card {
+  background: linear-gradient(160deg, rgba(15, 23, 42, 0.82) 0%, rgba(30, 41, 59, 0.68) 100%);
+  border-color: rgba(148, 163, 184, 0.28);
+  box-shadow: 0 20px 38px rgba(15, 23, 42, 0.4);
+  color: #e2e8f0;
+}
+
+.goals-tabs .ant-card .ant-card-head-title,
+.goals-tabs .ant-card .ant-card-extra {
+  color: #f8fafc;
+}
+
+.goals-tabs .ant-card .ant-typography,
+.goals-tabs .ant-card .ant-empty-description,
+.goals-tabs .ant-card .ant-progress-text,
+.goals-tabs .ant-card .ant-statistic-title,
+.goals-tabs .ant-card .ant-statistic-content-value,
+.goals-tabs .ant-card .ant-statistic-content-suffix {
+  color: #e2e8f0 !important;
+}
+
+.goals-tabs .ant-statistic-content-value-decimal,
+.goals-tabs .ant-statistic-content-value-int {
+  color: #e2e8f0;
+}
+
+.goals-tabs .ant-divider-horizontal::before,
+.goals-tabs .ant-divider-horizontal::after {
+  border-block-start-color: rgba(148, 163, 184, 0.25);
+}
+
+.goals-tabs .ant-form-item-label > label {
+  color: rgba(226, 232, 240, 0.88);
+}
+
+.goals-tabs .ant-input,
+.goals-tabs .ant-input-number,
+.goals-tabs .ant-input-number-input,
+.goals-tabs .ant-select-single .ant-select-selector,
+.goals-tabs .ant-select-multiple .ant-select-selector,
+.goals-tabs .ant-picker,
+.goals-tabs .ant-input-affix-wrapper {
+  background: rgba(15, 23, 42, 0.55) !important;
+  border-color: rgba(148, 163, 184, 0.35) !important;
+  color: #f8fafc !important;
+}
+
+.goals-tabs .ant-select-selection-placeholder,
+.goals-tabs .ant-select-selection-item,
+.goals-tabs .ant-select-selection-search-input,
+.goals-tabs .ant-input::placeholder,
+.goals-tabs .ant-input-number-input,
+.goals-tabs .ant-picker-input > input,
+.goals-tabs .ant-input-affix-wrapper .ant-input {
+  color: rgba(226, 232, 240, 0.86) !important;
+}
+
+.goals-tabs .ant-input-affix-wrapper-focused,
+.goals-tabs .ant-input-affix-wrapper:focus,
+.goals-tabs .ant-select-focused .ant-select-selector,
+.goals-tabs .ant-picker-focused,
+.goals-tabs .ant-input:focus,
+.goals-tabs .ant-input-number:focus,
+.goals-tabs .ant-input-number-focused,
+.goals-tabs .ant-select-open .ant-select-selector,
+.goals-tabs .ant-picker:hover,
+.goals-tabs .ant-select-selector:hover,
+.goals-tabs .ant-input:hover,
+.goals-tabs .ant-input-number:hover {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+}
+
+.goals-tabs .ant-tag {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: rgba(125, 211, 252, 0.45);
+  color: #f0f9ff;
+}
+
 .goals-history-pane {
   background: linear-gradient(135deg, rgba(15, 23, 42, 0.6) 0%, rgba(30, 41, 59, 0.45) 100%);
   padding: 20px;
