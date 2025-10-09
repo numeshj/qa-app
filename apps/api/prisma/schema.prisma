@@ -29,6 +29,9 @@ model User {
   DefectAssigned Defect[]   @relation("DefectAssignedTo")
   DefectReported Defect[]   @relation("DefectReportedBy")
   auditLogs     AuditLog[]
+  goalFocusAreas GoalFocusArea[]
+  weeklyPlans   WeeklyPlan[]
+  dailyPlans    DailyPlan[]
 }
 
 model Role {
@@ -94,6 +97,8 @@ model TestCaseFile {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
   testCases    TestCase[]
+  weeklyGoalLinks WeeklyGoalTestFile[]
+  dailyEntryLinks DailyEntryTestFile[]
   @@unique([projectId, name])
   @@map("test_case_files")
 }
@@ -200,6 +205,8 @@ model DefectFile {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
   defects      Defect[]
+  weeklyGoalLinks WeeklyGoalDefectFile[]
+  dailyEntryLinks DailyEntryDefectFile[]
   @@unique([projectId, name])
   @@map("defect_files")
 }
@@ -242,4 +249,159 @@ model LookupValue {
   createdAt  DateTime @default(now()) @map("created_at")
   @@unique([category, code])
   @@map("lookup_values")
+}
+
+enum WeeklyGoalStatus {
+  planned
+  on_track
+  at_risk
+  completed
+  deferred
+}
+
+enum DailyEntryStatus {
+  not_started
+  in_progress
+  done
+  blocked
+}
+
+model GoalFocusArea {
+  id          Int           @id @default(autoincrement())
+  user        User          @relation(fields: [userId], references: [id])
+  userId      Int
+  name        String
+  description String?       @db.Text
+  weight      Int           @default(0)
+  color       String        @default("#0ea5e9")
+  archived    Boolean       @default(false)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  weeklyGoals WeeklyGoal[]
+  dailyEntries DailyEntry[]
+  @@unique([userId, name])
+  @@map("goal_focus_areas")
+}
+
+model WeeklyPlan {
+  id             Int           @id @default(autoincrement())
+  user           User          @relation(fields: [userId], references: [id])
+  userId         Int
+  weekStart      DateTime      @map("week_start")
+  theme          String?
+  summaryNote    String?       @map("summary_note") @db.Text
+  overallScore   Int?          @map("overall_score")
+  moraleScore    Int?          @map("morale_score")
+  highlightNotes String?       @map("highlight_notes") @db.Text
+  adjustmentNotes String?      @map("adjustment_notes") @db.Text
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  goals          WeeklyGoal[]
+  @@unique([userId, weekStart])
+  @@map("weekly_plans")
+}
+
+model WeeklyGoal {
+  id             Int              @id @default(autoincrement())
+  plan           WeeklyPlan       @relation(fields: [planId], references: [id])
+  planId         Int
+  focusArea      GoalFocusArea?   @relation(fields: [focusAreaId], references: [id])
+  focusAreaId    Int?
+  title          String
+  metric         String?
+  progress       Int              @default(0)
+  status         WeeklyGoalStatus @default(planned)
+  impactScore    Int              @default(3) @map("impact_score")
+  owner          String?
+  notes          String?          @db.Text
+  updateSummary  String?          @map("update_summary") @db.Text
+  changeNotes    String?          @map("change_notes") @db.Text
+  reviewerNotes  String?          @map("reviewer_notes") @db.Text
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+  testFiles      WeeklyGoalTestFile[]
+  defectFiles    WeeklyGoalDefectFile[]
+  @@map("weekly_goals")
+}
+
+model WeeklyGoalTestFile {
+  id            Int           @id @default(autoincrement())
+  weeklyGoal    WeeklyGoal    @relation(fields: [weeklyGoalId], references: [id], onDelete: Cascade)
+  weeklyGoalId  Int           @map("weekly_goal_id")
+  testCaseFile  TestCaseFile  @relation(fields: [testCaseFileId], references: [id])
+  testCaseFileId Int          @map("test_case_file_id")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  @@unique([weeklyGoalId, testCaseFileId], map: "weekly_goal_test_file_unique")
+  @@map("weekly_goal_test_files")
+}
+
+model WeeklyGoalDefectFile {
+  id             Int          @id @default(autoincrement())
+  weeklyGoal     WeeklyGoal   @relation(fields: [weeklyGoalId], references: [id], onDelete: Cascade)
+  weeklyGoalId   Int          @map("weekly_goal_id")
+  defectFile     DefectFile   @relation(fields: [defectFileId], references: [id])
+  defectFileId   Int          @map("defect_file_id")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  @@unique([weeklyGoalId, defectFileId], map: "weekly_goal_defect_file_unique")
+  @@map("weekly_goal_defect_files")
+}
+
+model DailyPlan {
+  id             Int            @id @default(autoincrement())
+  user           User           @relation(fields: [userId], references: [id])
+  userId         Int
+  planDate       DateTime       @map("plan_date")
+  dayNote        String?        @map("day_note") @db.Text
+  energyScore    Int?           @map("energy_score")
+  clarityScore   Int?           @map("clarity_score")
+  highlightNotes String?        @map("highlight_notes") @db.Text
+  blockerNotes   String?        @map("blocker_notes") @db.Text
+  tomorrowNotes  String?        @map("tomorrow_notes") @db.Text
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  entries        DailyEntry[]
+  @@unique([userId, planDate])
+  @@map("daily_plans")
+}
+
+model DailyEntry {
+  id            Int             @id @default(autoincrement())
+  plan          DailyPlan       @relation(fields: [planId], references: [id])
+  planId        Int             @map("plan_id")
+  focusArea     GoalFocusArea?  @relation(fields: [focusAreaId], references: [id])
+  focusAreaId   Int?
+  title         String
+  status        DailyEntryStatus @default(not_started)
+  impactScore   Int              @default(3) @map("impact_score")
+  effortScore   Int              @default(2) @map("effort_score")
+  notes         String?          @db.Text
+  updateSummary String?          @map("update_summary") @db.Text
+  comment       String?          @db.Text
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+  testFiles     DailyEntryTestFile[]
+  defectFiles   DailyEntryDefectFile[]
+  @@map("daily_entries")
+}
+
+model DailyEntryTestFile {
+  id             Int           @id @default(autoincrement())
+  dailyEntry     DailyEntry    @relation(fields: [dailyEntryId], references: [id], onDelete: Cascade)
+  dailyEntryId   Int           @map("daily_entry_id")
+  testCaseFile   TestCaseFile  @relation(fields: [testCaseFileId], references: [id])
+  testCaseFileId Int           @map("test_case_file_id")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  @@unique([dailyEntryId, testCaseFileId], map: "daily_entry_test_file_unique")
+  @@map("daily_entry_test_files")
+}
+
+model DailyEntryDefectFile {
+  id            Int          @id @default(autoincrement())
+  dailyEntry    DailyEntry   @relation(fields: [dailyEntryId], references: [id], onDelete: Cascade)
+  dailyEntryId  Int          @map("daily_entry_id")
+  defectFile    DefectFile   @relation(fields: [defectFileId], references: [id])
+  defectFileId  Int          @map("defect_file_id")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  @@unique([dailyEntryId, defectFileId], map: "daily_entry_defect_file_unique")
+  @@map("daily_entry_defect_files")
 }
