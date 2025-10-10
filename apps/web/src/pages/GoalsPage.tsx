@@ -631,6 +631,7 @@ const GoalsPage = () => {
   const weeklyAggregation = useMemo(() => {
     const totalGoals = weekPlan.goals.length;
     const withUpdates = weekPlan.goals.filter((goal) => (goal.updateSummary ?? '').trim().length > 0).length;
+    const completedGoals = weekPlan.goals.filter((goal) => goal.status === 'completed').length;
     const testFiles = new Map<string, number>();
     const defectFiles = new Map<string, number>();
     weekPlan.goals.forEach((goal) => {
@@ -651,6 +652,8 @@ const GoalsPage = () => {
       totalGoals,
       withUpdates,
       updateCompletion: totalGoals ? Math.round((withUpdates / totalGoals) * 100) : 0,
+      completedGoals,
+      completionRate: totalGoals ? Math.round((completedGoals / totalGoals) * 100) : 0,
       testFiles,
       defectFiles
     };
@@ -659,6 +662,7 @@ const GoalsPage = () => {
   const dailyAggregation = useMemo(() => {
     const totalEntries = dayPlan.entries.length;
     const withUpdates = dayPlan.entries.filter((entry) => (entry.updateSummary ?? '').trim().length > 0).length;
+    const completedEntries = dayPlan.entries.filter((entry) => entry.status === 'done').length;
     const testFiles = new Map<string, number>();
     const defectFiles = new Map<string, number>();
     dayPlan.entries.forEach((entry) => {
@@ -679,6 +683,8 @@ const GoalsPage = () => {
       totalEntries,
       withUpdates,
       updateCompletion: totalEntries ? Math.round((withUpdates / totalEntries) * 100) : 0,
+      completedEntries,
+      completionRate: totalEntries ? Math.round((completedEntries / totalEntries) * 100) : 0,
       testFiles,
       defectFiles
     };
@@ -1230,8 +1236,8 @@ const GoalsPage = () => {
   }, [enablePageTests, focusAreas, weeklyWeightedScore, dailyWeightedScore]);
 
   return (
-    <Space direction="vertical" size={24} style={{ width: '100%' }}>
-      <div>
+    <Space direction="vertical" size={24} style={{ width: '100%' }} className="goals-page">
+      <div className="goals-intro">
         <Title level={2} style={{ marginBottom: 8 }}>Goals Intelligence Hub</Title>
         <Paragraph style={{ maxWidth: 780 }}>
           Configure strategic focus areas, plan your weekly objectives, steer daily execution and capture
@@ -1253,6 +1259,20 @@ const GoalsPage = () => {
               <Text type="secondary">
                 Based on focus-area weightings and completion of weekly goals.
               </Text>
+              <Divider style={{ margin: '12px 0' }} />
+              <Space size={16} align="center" style={{ width: '100%', justifyContent: 'space-between' }}>
+                <Progress
+                  type="circle"
+                  percent={weeklyAggregation.completionRate}
+                  width={86}
+                  strokeColor={{ '0%': '#60a5fa', '100%': '#2563eb' }}
+                />
+                <Statistic
+                  title="Goals completed"
+                  value={`${weeklyAggregation.completedGoals}/${weeklyAggregation.totalGoals || 0}`}
+                  valueStyle={{ fontSize: 22 }}
+                />
+              </Space>
             </Space>
           </Card>
         </Col>
@@ -1268,6 +1288,20 @@ const GoalsPage = () => {
               <Text type="secondary">
                 Reflects completion of today’s focus-aligned tasks.
               </Text>
+              <Divider style={{ margin: '12px 0' }} />
+              <Space size={16} align="center" style={{ width: '100%', justifyContent: 'space-between' }}>
+                <Progress
+                  type="circle"
+                  percent={dailyAggregation.completionRate}
+                  width={86}
+                  strokeColor={{ '0%': '#4ade80', '100%': '#16a34a' }}
+                />
+                <Statistic
+                  title="Entries done"
+                  value={`${dailyAggregation.completedEntries}/${dailyAggregation.totalEntries || 0}`}
+                  valueStyle={{ fontSize: 22 }}
+                />
+              </Space>
             </Space>
           </Card>
         </Col>
